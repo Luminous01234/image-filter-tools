@@ -1,0 +1,2783 @@
+<!DOCTYPE html>
+<!-- 优化版：文件操作安全、并发控制、EXIF/TIFF/HEIC 尺寸识别、评分记录恢复 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>本地图片查看·评分·批量重命名工具</title>
+<style>
+  :root{
+    --bg:#111214;
+    --panel:#1b1d20;
+    --panel2:#24272b;
+    --line:#34383e;
+    --text:#f4f4f5;
+    --muted:#a5a8ad;
+    --accent:#ff6a3d;
+    --green:#3fa75a;
+    --blue:#3a7bd5;
+    --purple:#7755cc;
+    --danger:#d84c4c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}
+  body{overflow:hidden}
+  .app{height:100vh;display:grid;grid-template-rows:auto 1fr auto;gap:12px;padding:14px}
+  .topbar,.bottombar{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .brand{font-size:18px;font-weight:800;margin-right:4px;white-space:nowrap}
+  .sub{font-size:12px;color:var(--muted)}
+  button{border:0;border-radius:9px;padding:9px 13px;background:#34383e;color:#fff;font-weight:700;cursor:pointer;font-size:13px}
+  button:hover{filter:brightness(1.12)}
+  button:disabled{opacity:.42;cursor:not-allowed}
+  button.primary{background:var(--accent)}
+  button.green{background:var(--green)}
+  button.blue{background:var(--blue)}
+  button.purple{background:var(--purple)}
+  button.danger{background:var(--danger)}
+  button.active{outline:2px solid #fff;outline-offset:2px}
+  .spacer{flex:1}
+  .status{font-size:12px;color:var(--muted);white-space:nowrap}
+  .viewer-shell{position:relative;min-height:0;background:#08090a;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .viewer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;cursor:grab;touch-action:none;background-image:linear-gradient(45deg,#0d0f11 25%,transparent 25%),linear-gradient(-45deg,#0d0f11 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#0d0f11 75%),linear-gradient(-45deg,transparent 75%,#0d0f11 75%);background-size:24px 24px;background-position:0 0,0 12px,12px -12px,-12px 0px}
+  .viewer.dragging{cursor:grabbing}
+  #image{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;transform-origin:50% 50%;transition:transform .08s ease-out;user-select:none;-webkit-user-drag:none;display:none;flex:0 0 auto;will-change:transform}
+  .viewer.dragging #image{transition:none}
+  .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#888;text-align:center;padding:30px;line-height:1.8}
+  .empty b{color:#ddd;font-size:18px}
+  .info-overlay{position:absolute;left:14px;top:14px;background:rgba(0,0,0,.60);backdrop-filter:blur(8px);padding:8px 10px;border-radius:9px;font-size:12px;color:#ddd;max-width:min(70vw,760px);word-break:break-all;pointer-events:none}
+  .rating-overlay{position:absolute;right:14px;top:14px;background:rgba(0,0,0,.60);backdrop-filter:blur(8px);padding:8px 10px;border-radius:9px;font-size:12px;color:#ddd;pointer-events:none}
+  .zoom-row,.score-row,.nav-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .label{font-size:12px;color:var(--muted);font-weight:700}
+  .kbd{display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;padding:0 5px;border:1px solid #555;border-bottom-width:2px;border-radius:5px;background:#25272a;color:#ddd;font-size:11px;font-weight:800}
+  .progress-wrap{min-width:170px;flex:1;display:flex;align-items:center;gap:9px}
+  .progress{height:7px;background:#30343a;border-radius:999px;overflow:hidden;flex:1;min-width:90px}
+  .progress>div{height:100%;width:0;background:#fff;transition:width .15s}
+  .counter{font-size:12px;color:#bbb;white-space:nowrap}
+  .stats{font-size:12px;color:#b9bdc3;display:flex;gap:10px;flex-wrap:wrap}
+  .stats b{color:#fff}
+  .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(10px);background:rgba(10,10,10,.9);border:1px solid #444;color:#fff;padding:10px 14px;border-radius:9px;font-size:13px;opacity:0;pointer-events:none;transition:.18s;z-index:20}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:30}
+  .modal.show{display:flex}
+  .modal-card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .modal-card h3{margin:0 0 10px;font-size:18px}
+  .modal-card p{color:#bbb;line-height:1.7;font-size:13px;margin:8px 0}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+  .rating-status{padding:4px 8px;border-radius:999px;background:#24272b;border:1px solid #34383e}
+  .rating-status.pending{color:#ffca5c}
+  .rating-status.complete{color:#72df82}
+  .review-card{--review-card-width:260px;width:min(1180px,96vw);height:min(90vh,900px);padding:0;overflow:hidden;display:flex;flex-direction:column;position:relative}
+  .modal.review-fullscreen{padding:0}
+  .modal.review-fullscreen .review-card{width:100vw;height:100dvh;max-width:none;max-height:none;border:0;border-radius:0}
+  .review-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:16px 18px;border-bottom:1px solid var(--line)}
+  .review-header h3{margin:0;margin-right:auto}
+  .review-sub{font-size:12px;color:var(--muted);width:100%;line-height:1.6}
+  .review-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line);background:#15171a}
+  .review-filters button{padding:7px 10px;font-size:12px}
+  .review-filters button.active{outline:2px solid #fff;outline-offset:1px}
+  .review-size-control{margin-left:auto;display:flex;align-items:center;gap:8px;color:#b9bdc3;font-size:12px;white-space:nowrap}
+  .review-size-control input[type=range]{width:190px;accent-color:#fff;cursor:pointer}
+  .review-size-value{min-width:44px;text-align:right;color:#fff;font-variant-numeric:tabular-nums}
+  .review-summary{padding:9px 18px;color:#b9bdc3;font-size:12px;border-bottom:1px solid var(--line)}
+  .review-grid-wrap{flex:1;min-height:0;overflow:auto;padding:14px 18px;background:#0d0f11}
+  .review-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--review-card-width,260px),1fr));gap:12px}
+  .review-item{background:#17191c;border:1px solid #30343a;border-radius:10px;overflow:hidden;min-width:0}
+  .review-item:hover{border-color:#555b64}
+  .review-thumb{aspect-ratio:4/3;background:#08090a;display:flex;align-items:center;justify-content:center;position:relative;cursor:zoom-in}
+  .review-thumb img{width:100%;height:100%;object-fit:contain;display:block}
+  .review-thumb-error{display:none;color:#777;font-size:12px;padding:10px;text-align:center}
+  .review-item-body{padding:9px}
+  .review-name{font-size:12px;color:#d7d9dc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:7px}
+  .review-rating-line{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#aaa;margin-bottom:8px}
+  .review-rating-badge{padding:3px 7px;border-radius:999px;background:#2b2f34;color:#fff;white-space:nowrap}
+  .review-rating-badge.unrated{color:#ffca5c}
+  .review-rate-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+  .review-rate-actions button{padding:6px 3px;font-size:11px;min-width:0}
+  .review-rate-actions button.active{outline:2px solid #fff;outline-offset:0}
+  .review-empty{display:none;color:#888;text-align:center;padding:44px 12px}
+  .review-footer{display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 18px;border-top:1px solid var(--line)}
+  .review-footer-note{font-size:11px;color:#8f949b;margin-right:auto}
+  .review-lightbox{position:absolute;inset:0;z-index:12;display:none;flex-direction:column;background:#08090b;color:#fff}
+  .review-lightbox.show{display:flex}
+  .review-lightbox-toolbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #30343a;background:#15171a;min-height:54px}
+  .review-lightbox-title{min-width:0;flex:1}
+  .review-lightbox-name{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .review-lightbox-meta{font-size:11px;color:#aeb3ba;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .review-lightbox-toolbar button{padding:8px 11px}
+  .review-lightbox-stage{position:relative;flex:1;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#050607;cursor:grab;touch-action:none}
+  .review-lightbox-stage.dragging{cursor:grabbing}
+  .review-lightbox-image{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;transform-origin:50% 50%;user-select:none;-webkit-user-drag:none;will-change:transform;display:none;flex:0 0 auto}
+  .review-lightbox-error{display:none;color:#8f949b;text-align:center;padding:20px;line-height:1.7}
+  .review-lightbox-hint{position:absolute;left:14px;bottom:14px;padding:7px 9px;border-radius:8px;background:rgba(0,0,0,.62);font-size:11px;color:#c7cbd0;pointer-events:none}
+  .review-lightbox-footer{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid #30343a;background:#15171a;flex-wrap:wrap}
+  .review-lightbox-rating{font-size:12px;color:#b9bdc3;margin-right:auto}
+  .review-lightbox-rating b{color:#fff}
+  .review-lightbox-rate-actions{display:flex;gap:7px;align-items:center}
+  .review-lightbox-rate-actions button{padding:8px 13px}
+  .review-lightbox-rate-actions button.active{outline:2px solid #fff;outline-offset:1px}
+  .rename-card{width:min(1120px,96vw);max-height:92vh;overflow:auto}
+  .rename-card h3{margin-bottom:14px}
+  .rename-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .rename-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px}
+  .rename-field label{display:block;font-size:12px;color:#cfd2d6;margin-bottom:6px;font-weight:700}
+  .rename-field input,.rename-field select{width:100%;border:1px solid #454a52;border-radius:9px;background:#17191c;color:#fff;padding:10px 11px;font-size:13px;outline:none}
+  .rename-field input:focus,.rename-field select:focus{border-color:#777d86}
+  .rename-template{margin-top:12px;padding:11px 12px;background:#15171a;border:1px dashed #4b5058;border-radius:9px;color:#d9dce0;font-size:13px;word-break:break-all}
+  .rename-template b{color:var(--accent)}
+  .rename-summary{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0 8px;color:#c7cbd0;font-size:12px}
+  .rename-summary b{color:#fff}
+  .rename-table-wrap{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:38vh}
+  .rename-table{width:100%;border-collapse:collapse;min-width:860px;background:#15171a}
+  .rename-table th,.rename-table td{padding:9px 10px;text-align:left;border-bottom:1px solid #30343a;font-size:12px;vertical-align:middle}
+  .rename-table th{position:sticky;top:0;z-index:2;background:#292d32;color:#f0f1f2}
+  .rename-table td.old-name{color:#aeb3ba}
+  .rename-table td.new-name{font-weight:700;color:#fff}
+  .rename-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#34383e;font-size:11px;white-space:nowrap}
+  .rename-badge.landscape{color:#8ecbff}
+  .rename-badge.portrait{color:#ffb1d8}
+  .rename-badge.ok{color:#72df82}
+  .rename-badge.warn{color:#ffca5c}
+  .rename-note{color:#aeb3ba;font-size:12px;line-height:1.7;margin-top:10px}
+  .rename-log{display:none;margin-top:10px;padding:10px;background:#0e0f11;border:1px solid #333840;border-radius:9px;max-height:180px;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:#cfd2d6}
+  .rename-required::after{content:" *";color:#ff6b6b}
+  .rename-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:10px 0 12px}
+  .rename-toolbar>div{min-width:180px}.rename-toolbar .spacer{flex:1;min-width:0}
+  .rename-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+  .rename-status{margin-left:auto;color:#aeb3ba;font-size:12px;max-width:46%;text-align:right;word-break:break-all}
+  .rename-mode{padding:5px 9px;border-radius:999px;background:#17191c;border:1px solid #333840;color:#aeb3ba;font-size:11px}
+  .rename-progress{display:none;margin-top:10px}.rename-progress-bar{height:7px;background:#292d32;border-radius:99px;overflow:hidden}.rename-progress-fill{height:100%;width:0%;background:var(--accent);transition:width .15s}.rename-progress-text{font-size:11px;color:#aeb3ba;margin-top:6px}
+  .rename-notice{display:none;margin-top:10px;padding:11px 12px;border-radius:9px;background:#251b1b;border:1px solid #593535;color:#ffd0d0;font-size:12px;line-height:1.65;white-space:pre-wrap;max-height:190px;overflow:auto}
+  .rename-transaction{display:none;margin-top:10px;padding:12px;border-radius:10px;background:#29220f;border:1px solid #725a22}.rename-transaction-title{font-weight:800;color:#ffe19a;margin-bottom:6px}.rename-transaction-text{font-size:12px;color:#e5d6ad;line-height:1.65}.rename-transaction-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .rename-check{width:17px!important;height:17px;accent-color:var(--accent);padding:0!important}.rename-small{font-size:11px;color:#888}.rename-excluded{color:#777}.rename-muted{color:#999}
+  .rename-preview-limit{color:#888;font-size:11px;margin-top:8px}.rename-card.rename-busy{opacity:.82}.rename-card.rename-busy button,.rename-card.rename-busy input,.rename-card.rename-busy select{pointer-events:none}
+  .rename-score-hint{margin-top:5px;font-size:11px;color:#8ecbff}.rename-score-hint.bad{color:#ffca5c}
+  @media(max-width:900px){
+    .app{padding:8px;gap:8px}.topbar,.bottombar{border-radius:10px}.sub{display:none}.spacer{display:none}.bottombar{align-items:flex-start}.progress-wrap{width:100%;order:9}.rename-grid,.rename-options{grid-template-columns:1fr}.review-size-control{width:100%;margin-left:0}.review-size-control input[type=range]{flex:1;width:auto}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">本地图片查看 · 评分 · 重命名工具</div>
+    <div class="sub">纯本地 · 不上传图片 · 适合 Mac + Chrome</div>
+    <button id="pickBtn" class="primary">选择图片文件夹</button>
+    <button id="ratingReviewBtn" class="blue" disabled>评分预览</button>
+    <button id="jumpUnratedBtn" disabled>查看未评分</button>
+    <button id="exportBtn" class="green" disabled title="必须完成全部图片评分后才能导出">按评分导出分类</button>
+    <button id="renameOpenBtn" class="purple">批量重命名</button>
+    <button id="resetBtn" disabled>清空当前评分</button>
+    <div class="spacer"></div>
+    <div class="status rating-status" id="ratingCompletionStatus">评分 0 / 0</div>
+    <div class="status" id="folderStatus">尚未选择文件夹</div>
+  </div>
+
+  <div class="viewer-shell" id="viewerShell">
+    <div class="viewer" id="viewer">
+      <img id="image" alt="当前图片" />
+      <div class="empty" id="emptyState">
+        <b>请选择图片文件夹</b>
+        <span>图片默认适应窗口显示，可直接使用鼠标滚轮自由放大/缩小并拖动查看。点击「1:1 原始像素」可立即切到真实像素尺寸，之后仍可继续滚轮缩放；再次点击返回适应窗口。</span>
+      </div>
+    </div>
+    <div class="info-overlay" id="imageInfo" style="display:none"></div>
+    <div class="rating-overlay" id="ratingInfo" style="display:none">当前分类：未评分</div>
+  </div>
+
+  <div class="bottombar">
+    <div class="zoom-row">
+      <span class="label">细节查看</span>
+      <button id="pixel11" title="快捷键 1：按一次进入真实 1:1 原始像素；再按一次返回适应窗口。两种状态都可滚轮自由缩放并拖动查看">1:1 原始像素 <span class="kbd">1</span></button>
+      <span class="label">滚轮缩放 · 拖动查看 · 双击回中心</span>
+    </div>
+
+    <div class="score-row">
+      <span class="label">评分 / 标记</span>
+      <button id="rate3" class="blue">3 分 <span class="kbd">A</span></button>
+      <button id="rate35" class="purple">3.5 分 <span class="kbd">S</span></button>
+      <button id="rate4" class="green">4 分 <span class="kbd">D</span></button>
+      <button id="rateDup" class="danger">重复 <span class="kbd">R</span></button>
+    </div>
+
+    <div class="nav-row">
+      <button id="prevBtn">← 上一张</button>
+      <button id="nextBtn">下一张 →</button>
+      <button id="fullBtn">全屏 <span class="kbd">F</span></button>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress"><div id="progressBar"></div></div>
+      <div class="counter" id="counter">0 / 0</div>
+    </div>
+
+    <div class="stats" id="stats">
+      <span>3分 <b>0</b></span><span>3.5分 <b>0</b></span><span>4分 <b>0</b></span><span>重复 <b>0</b></span><span>未评 <b>0</b></span>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="ratingReviewModal">
+  <div class="modal-card review-card">
+    <div class="review-header">
+      <h3>评分预览 / 最终复查</h3>
+      <button id="ratingReviewJumpUnrated">跳到第一张未评分</button>
+      <button id="ratingReviewFullscreenBtn" title="快捷键 F">全屏 <span class="kbd">F</span></button>
+      <button id="ratingReviewCloseBtn">关闭</button>
+      <div class="review-sub">按分类筛选并复查评分。可直接在缩略图下修改分数；点击缩略图会在当前预览内打开大图复查，不会丢失筛选和滚动位置。大图库按批次加载缩略图，避免一次性占用过多内存。</div>
+    </div>
+    <div class="review-filters" id="ratingReviewFilters">
+      <button data-review-filter="all" class="active">全部 <b id="reviewCountAll">0</b></button>
+      <button data-review-filter="3">3分 <b id="reviewCount3">0</b></button>
+      <button data-review-filter="3.5">3.5分 <b id="reviewCount35">0</b></button>
+      <button data-review-filter="4">4分 <b id="reviewCount4">0</b></button>
+      <button data-review-filter="重复">重复 <b id="reviewCountDup">0</b></button>
+      <button data-review-filter="unrated">未评分 <b id="reviewCountUnrated">0</b></button>
+      <div class="review-size-control">
+        <span>图片大小</span>
+        <input id="ratingReviewSize" type="range" min="160" max="480" step="20" value="260" aria-label="评分预览图片大小">
+        <span class="review-size-value" id="ratingReviewSizeValue">260px</span>
+      </div>
+    </div>
+    <div class="review-summary" id="ratingReviewSummary">0 张图片</div>
+    <div class="review-grid-wrap" id="ratingReviewScroll">
+      <div class="review-grid" id="ratingReviewGrid"></div>
+      <div class="review-empty" id="ratingReviewEmpty">当前分类没有图片</div>
+    </div>
+    <div class="review-footer">
+      <span class="review-footer-note">提示：修改评分会立即保存；只有“未评分 = 0”时才允许导出。</span>
+      <button id="ratingReviewLoadMore">加载更多</button>
+    </div>
+    <div class="review-lightbox" id="ratingReviewLightbox" aria-hidden="true">
+      <div class="review-lightbox-toolbar">
+        <button id="ratingReviewLightboxPrev" title="上一张（←）">← 上一张</button>
+        <div class="review-lightbox-title">
+          <div class="review-lightbox-name" id="ratingReviewLightboxName">—</div>
+          <div class="review-lightbox-meta" id="ratingReviewLightboxMeta">—</div>
+        </div>
+        <button id="ratingReviewLightboxPixel" title="快捷键 1">1:1 <span class="kbd">1</span></button>
+        <button id="ratingReviewLightboxNext" title="下一张（→）">下一张 →</button>
+        <button id="ratingReviewLightboxClose" title="快捷键 Esc">返回缩略图 <span class="kbd">Esc</span></button>
+      </div>
+      <div class="review-lightbox-stage" id="ratingReviewLightboxStage">
+        <img class="review-lightbox-image" id="ratingReviewLightboxImage" alt="评分预览大图">
+        <div class="review-lightbox-error" id="ratingReviewLightboxError">正在读取图片…</div>
+        <div class="review-lightbox-hint">滚轮缩放 · 拖动查看 · 双击回中心 · A/S/D/R 改分</div>
+      </div>
+      <div class="review-lightbox-footer">
+        <div class="review-lightbox-rating">当前评分：<b id="ratingReviewLightboxRating">—</b></div>
+        <div class="review-lightbox-rate-actions" id="ratingReviewLightboxRateActions">
+          <button data-review-lightbox-score="3">3 分 <span class="kbd">A</span></button>
+          <button data-review-lightbox-score="3.5">3.5 分 <span class="kbd">S</span></button>
+          <button data-review-lightbox-score="4">4 分 <span class="kbd">D</span></button>
+          <button data-review-lightbox-score="重复">重复 <span class="kbd">R</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="exportModal">
+  <div class="modal-card">
+    <h3>导出评分分类</h3>
+    <p>将在当前图片文件夹内按实际图片数量重建分类子文件夹，例如 <b>3.5分-15张</b>、<b>4分-28张</b>、<b>重复-6张</b>，并把已筛选图片复制进去。导出时会优先复用已经完整写入的同名文件；只有全部新分类通过数量与文件大小校验后，才清理过期评分文件夹，避免中途中断丢失已完成结果。</p>
+    <p>根目录中的原始图片不会删除、不会移动、不会重新编码，因此不会改变画质。评分子文件夹属于导出副本，可随时从原图重新生成。</p>
+    <p id="exportSummary"></p>
+    <div class="modal-actions">
+      <button id="cancelExport">取消</button>
+      <button id="confirmExport" class="green">开始导出</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="renameModal">
+  <div class="modal-card rename-card" id="renameCard">
+    <h3>图片批量重命名 · 安全增强版</h3>
+
+    <div class="rename-grid">
+      <div class="rename-field">
+        <label class="rename-required" for="renameType">类别</label>
+        <input id="renameType" placeholder="例如：日系清新">
+      </div>
+      <div class="rename-field">
+        <label class="rename-required" for="renameScore">分数（自动识别全部）</label>
+        <input id="renameScore" placeholder="自动扫描当前主目录中的评分文件夹" disabled>
+        <div class="rename-score-hint" id="renameScoreHint">打开后自动扫描 3分 / 3.5分 / 4分 / 重复 子文件夹</div>
+      </div>
+      <div class="rename-field">
+        <label for="renameTag">TAG（可选）</label>
+        <input id="renameTag" placeholder="例如：自然光；多个标签可用 +">
+      </div>
+    </div>
+
+    <div class="rename-options">
+      <div class="rename-field">
+        <label for="renameStartNo">起始编号</label>
+        <input id="renameStartNo" type="number" value="1" min="0" step="1">
+      </div>
+      <div class="rename-field">
+        <label for="renameDigits">编号位数</label>
+        <select id="renameDigits">
+          <option value="auto" selected>自动</option>
+          <option value="0">不补零</option>
+          <option value="2">2 位</option>
+          <option value="3">3 位</option>
+          <option value="4">4 位</option>
+          <option value="5">5 位</option>
+          <option value="6">6 位</option>
+        </select>
+      </div>
+      <div class="rename-field">
+        <label for="renameSortMode">编号顺序</label>
+        <select id="renameSortMode">
+          <option value="orientation" selected>横屏在前，竖屏在后</option>
+          <option value="name">按原文件名排序</option>
+          <option value="folder">按文件夹读取顺序（不推荐）</option>
+        </select>
+      </div>
+      <div class="rename-field">
+        <label for="renameSeparator">分隔符</label>
+        <select id="renameSeparator">
+          <option value="-" selected>-</option>
+          <option value="_">_</option>
+          <option value=" ">空格</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="rename-template">命名预览：<b id="renameTemplatePreview">类别-自动分数-[TAG]-横屏/竖屏-编号</b></div>
+
+    <div class="rename-actions">
+      <button id="renameFolderPickBtn" class="purple">① 扫描当前评分文件夹</button>
+      <button id="renameScanBtn" disabled>重新扫描</button>
+      <button id="renameExportPreviewBtn" disabled>导出预览 CSV</button>
+      <button id="renameExecuteBtn" class="green" disabled>③ 执行重命名</button>
+      <button id="renameUndoBtn" class="danger" disabled>撤销上一次重命名</button>
+      <span class="rename-mode" id="renameOperationMode">文件操作：自动检测</span>
+      <span class="rename-status" id="renameFolderStatus">等待扫描当前主图片文件夹</span>
+    </div>
+
+    <div class="rename-progress" id="renameProgress">
+      <div class="rename-progress-bar"><div class="rename-progress-fill" id="renameProgressFill"></div></div>
+      <div class="rename-progress-text" id="renameProgressText"></div>
+    </div>
+
+    <div class="rename-transaction" id="renameTransactionPanel">
+      <div class="rename-transaction-title">检测到未完成的文件操作</div>
+      <div class="rename-transaction-text" id="renameTransactionText"></div>
+      <div class="rename-transaction-actions">
+        <button id="renameContinueInterruptedBtn">继续上次任务</button>
+        <button id="renameRecoverInterruptedBtn" class="danger">恢复到操作前</button>
+      </div>
+    </div>
+
+    <div class="rename-note">直接使用主界面当前选择的图片目录，自动扫描其中的 <b>3分 / 3.5分 / 4分 / 重复</b> 评分导出子文件夹，例如 <b>3分-47张</b>、<b>3.5分-68张</b>、<b>4分-22张</b>、<b>重复-6张</b>，无需逐个重新选择。每个评分文件夹自动识别自己的分数，并分别从起始编号独立编号；文件夹声明数量与实际图片数不一致时，整批操作会被禁止。命名格式为“类别-自动分数-[可选TAG]-横屏/竖屏-编号”。整批文件夹共用一个安全事务，支持中断继续、整体恢复、整体撤销、CSV 映射、参与排除和自动编号位数；只修改文件名，不重新编码图片。</div>
+    <div class="rename-notice" id="renameNotice"></div>
+
+    <div class="rename-summary">
+      <span>图片 <b id="renameCountAll">0</b></span>
+      <span>横屏 <b id="renameCountLandscape">0</b></span>
+      <span>竖屏 <b id="renameCountPortrait">0</b></span>
+      <span>尺寸读取失败 <b id="renameCountErrors">0</b></span>
+      <span>冲突 <b id="renameCountConflicts">0</b></span>
+      <span>无需修改 <b id="renameCountUnchanged">0</b></span>
+      <span>已排除 <b id="renameCountExcluded">0</b></span>
+      <span>待重命名 <b id="renameCountPending">0</b></span>
+    </div>
+
+    <div class="rename-toolbar">
+      <div class="rename-field">
+        <label for="renameStatusFilter">显示筛选</label>
+        <select id="renameStatusFilter">
+          <option value="all">全部</option>
+          <option value="pending">只看待重命名</option>
+          <option value="conflict">只看命名冲突</option>
+          <option value="readerror">只看尺寸读取失败</option>
+          <option value="unchanged">只看无需修改</option>
+          <option value="excluded">只看已排除</option>
+        </select>
+      </div>
+      <div class="spacer"></div>
+      <div class="rename-small">取消“参与”后，该图片不会占用编号，也不会被重命名。</div>
+    </div>
+
+    <div class="rename-table-wrap">
+      <table class="rename-table">
+        <thead><tr><th style="width:60px">参与</th><th style="width:140px">评分文件夹</th><th style="width:50px">#</th><th>原文件名</th><th style="width:120px">尺寸</th><th style="width:90px">方向</th><th>新文件名</th><th style="width:110px">状态</th></tr></thead>
+        <tbody id="renameTbody"><tr><td colspan="8" style="text-align:center;color:#888;padding:30px">请先在主界面选择图片文件夹</td></tr></tbody>
+      </table>
+    </div>
+    <div class="rename-preview-limit" id="renamePreviewLimit"></div>
+
+    <div class="modal-actions">
+      <button id="renameCancelBtn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const IMAGE_EXT = new Set(['jpg','jpeg','png','webp','gif','bmp','avif','tif','tiff','heic','heif']);
+  let dirHandle = null;
+  let items = [];
+  let currentIndex = 0;
+  let viewMode = 'fit'; // fit: 适应窗口；pixel: 1:1 原始像素
+  let viewScale = 1; // 两种模式都支持自由缩放；1 表示各自模式的基准尺寸
+  let panX = 0;
+  let panY = 0;
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragBaseX = 0;
+  let dragBaseY = 0;
+  let currentUrl = null;
+  let viewerPreload = null;
+  let viewerPreloadToken = 0;
+  let showRequestId = 0;
+  let viewerActionQueue = Promise.resolve();
+  let viewerQueuedCount = 0;
+  let ratings = {};
+  let ratingCounts = {c3:0,c35:0,c4:0,cDup:0,unrated:0,rated:0};
+  let storageKey = '';
+  let stateSaveTimer = null;
+  let stateDirty = false;
+  const STATE_SAVE_DELAY = 250;
+  let exportBusy = false;
+  let renameBusy = false;
+  let renameScanBusy = false;
+  let fileOperationBusy = false;
+  let renameDirHandle = null; // 当前主图片目录；重命名会自动扫描其评分子文件夹
+  let renameGroups = [];
+  let renameItems = [];
+  let renameReadErrors = [];
+  let renameExistingNamesMap = new Map();
+  let renameRebuildTimer = null;
+  let renameCurrentTransaction = null;
+  let renameNativeMoveSupport = null;
+  let renameNumberingError = '';
+  let renameScanSafetyError = '';
+  let renameDetectedScore = ''; // 多评分文件夹摘要，仅用于界面显示
+  let renameDetectedDeclaredCount = null; // 保留兼容字段；多文件夹模式不直接使用
+  const RENAME_PREVIEW_LIMIT = 300;
+  const RENAME_YIELD_EVERY = 40;
+  const RENAME_TEMP_PREFIX = '.__img_rename_tmp_';
+  const RENAME_MANIFEST_NAME = '.image_renamer_last.json';
+  const RENAME_TX_NAME = '.image_renamer_transaction.json';
+  const RENAME_TX_PROGRESS_NAME = '.image_renamer_transaction_progress.json';
+  const RENAME_CSV_PREFIX = 'rename_map_';
+  const RENAME_PREVIEW_PREFIX = 'rename_preview_';
+  const RENAME_SETTINGS_KEY = 'local-image-rater-safe-renamer-settings-v3';
+  const REVIEW_BATCH_SIZE = 80;
+  const REVIEW_SIZE_STORAGE_KEY = 'local-image-rater-review-card-size';
+  const REVIEW_SIZE_MIN = 160;
+  const REVIEW_SIZE_MAX = 480;
+  const REVIEW_SIZE_DEFAULT = 260;
+  let reviewFilter = 'all';
+  let reviewRenderedCount = 0;
+  let reviewRenderToken = 0;
+  const reviewObjectUrls = new Set();
+  let reviewLightboxOpen = false;
+  let reviewLightboxNames = [];
+  let reviewLightboxIndex = -1;
+  let reviewLightboxUrl = null;
+  let reviewLightboxLoadToken = 0;
+  let reviewLightboxMode = 'fit';
+  let reviewLightboxScale = 1;
+  let reviewLightboxPanX = 0;
+  let reviewLightboxPanY = 0;
+  let reviewLightboxDragging = false;
+  let reviewLightboxDragStartX = 0;
+  let reviewLightboxDragStartY = 0;
+  let reviewLightboxDragBaseX = 0;
+  let reviewLightboxDragBaseY = 0;
+  let reviewLightboxDirty = false;
+  let reviewLightboxReturnScrollTop = 0;
+  let reviewLightboxReturnRenderedCount = 0;
+
+  function yieldToBrowser(){
+    return new Promise(resolve => setTimeout(resolve, 0));
+  }
+
+  function extOf(name){
+    const i = name.lastIndexOf('.');
+    return i >= 0 ? name.slice(i+1).toLowerCase() : '';
+  }
+
+  function humanBytes(bytes){
+    if (!Number.isFinite(bytes)) return '';
+    const u = ['B','KB','MB','GB'];
+    let n = bytes, i = 0;
+    while (n >= 1024 && i < u.length-1){ n /= 1024; i++; }
+    return `${n.toFixed(i ? 1 : 0)} ${u[i]}`;
+  }
+
+  function hashText(s){
+    let h = 2166136261;
+    for (let i=0;i<s.length;i++){
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  function makeStorageKey(){
+    const sig = items.map(x => `${x.name}:${x.size}:${x.lastModified}`).join('|');
+    return `local-image-rater-v1:${dirHandle?.name || 'folder'}:${hashText(sig)}`;
+  }
+
+  function findCompatibleStoredState(){
+    const prefix = `local-image-rater-v1:${dirHandle?.name || 'folder'}:`;
+    const currentNames = new Set(items.map(x => x.name));
+    let best = null;
+    let bestOverlap = 0;
+    let bestRatio = 0;
+    let bestUpdatedAt = 0;
+
+    try{
+      for (let i=0;i<localStorage.length;i++){
+        const key = localStorage.key(i);
+        if (!key || key === storageKey || !key.startsWith(prefix)) continue;
+        let data;
+        try{ data = JSON.parse(localStorage.getItem(key) || '{}'); }catch(_){ continue; }
+        if (!data || typeof data !== 'object' || !data.ratings || typeof data.ratings !== 'object') continue;
+        const ratedNames = Object.keys(data.ratings).filter(name => isReviewedCategory(data.ratings[name]));
+        if (!ratedNames.length) continue;
+        let overlap = 0;
+        for (const name of ratedNames) if (currentNames.has(name)) overlap++;
+        if (!overlap) continue;
+        const ratio = overlap / ratedNames.length;
+        const minOverlap = Math.min(2,ratedNames.length);
+        if (overlap < minOverlap || ratio < 0.5) continue;
+        const updatedAt = Number(data.updatedAt) || 0;
+        if (overlap > bestOverlap ||
+            (overlap === bestOverlap && ratio > bestRatio) ||
+            (overlap === bestOverlap && ratio === bestRatio && updatedAt > bestUpdatedAt)){
+          best = data;
+          bestOverlap = overlap;
+          bestRatio = ratio;
+          bestUpdatedAt = updatedAt;
+        }
+      }
+    }catch(_){ }
+    return best;
+  }
+
+  function loadState(){
+    ratings = {};
+    currentIndex = 0;
+    if (!storageKey) return;
+    let data = null;
+    let migrated = false;
+    try{
+      const raw = localStorage.getItem(storageKey);
+      if (raw !== null) data = JSON.parse(raw || '{}');
+      else {
+        data = findCompatibleStoredState();
+        migrated = !!data;
+      }
+      if (data && typeof data === 'object'){
+        ratings = data.ratings && typeof data.ratings === 'object' ? data.ratings : {};
+        currentIndex = Number.isInteger(data.currentIndex) ? data.currentIndex : 0;
+      }
+    }catch(_){ }
+
+    // 已全部筛完的文件夹再次导入时，始终从第 1 张开始。
+    // 只有仍存在未评分图片时，才按照历史 currentIndex 继续。
+    const isFullyRated = items.length > 0 && items.every(item => isReviewedCategory(ratings[item.name]));
+    if (isFullyRated){
+      currentIndex = 0;
+    } else {
+      currentIndex = Math.max(0, Math.min(currentIndex, Math.max(0,items.length-1)));
+    }
+    if (migrated) saveState();
+  }
+
+  function persistStateNow(){
+    if (!storageKey || !stateDirty) return true;
+    try{
+      localStorage.setItem(storageKey, JSON.stringify({ratings,currentIndex,updatedAt:Date.now()}));
+      stateDirty = false;
+      return true;
+    }catch(err){
+      console.error('评分记录保存失败',err);
+      return false;
+    }
+  }
+
+  function saveState(){
+    if (!storageKey) return;
+    stateDirty = true;
+    clearTimeout(stateSaveTimer);
+    stateSaveTimer = setTimeout(()=>{
+      stateSaveTimer = null;
+      persistStateNow();
+    }, STATE_SAVE_DELAY);
+  }
+
+  function flushStateSave(){
+    if (stateSaveTimer){
+      clearTimeout(stateSaveTimer);
+      stateSaveTimer = null;
+    }
+    return persistStateNow();
+  }
+
+  function isRatingComplete(){
+    if (!items.length) return false;
+    const {unrated,rated} = ratingCounts;
+    return unrated === 0 && rated === items.length;
+  }
+
+  function updateRatingActionState(){
+    const {unrated,rated} = ratingCounts;
+    const hasItems = !!items.length;
+    const complete = hasItems && unrated === 0 && rated === items.length;
+    $('ratingReviewBtn').disabled = fileOperationBusy || !hasItems;
+    $('jumpUnratedBtn').disabled = fileOperationBusy || !hasItems || unrated === 0;
+    $('exportBtn').disabled = fileOperationBusy || !complete;
+    $('exportBtn').title = complete ? '全部图片已评分，可以导出' : (hasItems ? `还有 ${unrated} 张未评分，完成后才能导出` : '请先选择图片文件夹');
+    $('ratingCompletionStatus').textContent = hasItems ? `评分 ${rated} / ${items.length}${unrated ? ` · 未评 ${unrated}` : ' · 已完成'}` : '评分 0 / 0';
+    $('ratingCompletionStatus').classList.toggle('pending', hasItems && !complete);
+    $('ratingCompletionStatus').classList.toggle('complete', complete);
+  }
+
+  function setFileOperationBusy(busy){
+    fileOperationBusy = !!busy;
+    const hasItems = !!items.length;
+    $('pickBtn').disabled = fileOperationBusy;
+    $('renameOpenBtn').disabled = fileOperationBusy;
+    $('resetBtn').disabled = fileOperationBusy || !hasItems;
+    for (const id of ['rate3','rate35','rate4','rateDup']) $(id).disabled = fileOperationBusy || !hasItems;
+    updateRatingActionState();
+  }
+
+  function toast(text){
+    const el = $('toast');
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), 1500);
+  }
+
+
+  function applyFitBaseStyle(){
+    const img = $('image');
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '100%';
+    img.style.width = 'auto';
+    img.style.height = 'auto';
+  }
+
+  function clampViewScale(value){
+    const n = Number(value);
+    if (!Number.isFinite(n)) return viewScale;
+    // 允许两种基准模式下自由缩放。上限留得足够高用于像素级细节检查。
+    return Math.min(10, Math.max(0.1, n));
+  }
+
+  function getPanBounds(){
+    const img = $('image');
+    const viewer = $('viewer');
+    if (!img.offsetWidth || !img.offsetHeight) return {maxX:0,maxY:0};
+    const shownW = img.offsetWidth * viewScale;
+    const shownH = img.offsetHeight * viewScale;
+    return {
+      maxX: Math.max(0, (shownW - viewer.clientWidth) / 2),
+      maxY: Math.max(0, (shownH - viewer.clientHeight) / 2)
+    };
+  }
+
+  function clampPan(){
+    const {maxX,maxY} = getPanBounds();
+    panX = Math.max(-maxX, Math.min(maxX, panX));
+    panY = Math.max(-maxY, Math.min(maxY, panY));
+  }
+
+  function applyImageTransform(){
+    const img = $('image');
+    clampPan();
+    img.style.transform = `translate(${panX}px, ${panY}px) scale(${viewScale})`;
+  }
+
+  function setViewScale(nextScale, anchorClientX=null, anchorClientY=null){
+    if (!items.length || $('image').style.display === 'none') return;
+    const oldScale = viewScale;
+    const newScale = clampViewScale(nextScale);
+    if (Math.abs(newScale - oldScale) < 0.0001) return;
+
+    // 以鼠标所在位置为缩放锚点，查看细节时不会因为缩放跳离当前关注区域。
+    if (Number.isFinite(anchorClientX) && Number.isFinite(anchorClientY) && oldScale > 0){
+      const rect = $('viewer').getBoundingClientRect();
+      const cx = anchorClientX - (rect.left + rect.width / 2);
+      const cy = anchorClientY - (rect.top + rect.height / 2);
+      const localX = (cx - panX) / oldScale;
+      const localY = (cy - panY) / oldScale;
+      panX = cx - localX * newScale;
+      panY = cy - localY * newScale;
+    }else if (oldScale > 0){
+      const ratio = newScale / oldScale;
+      panX *= ratio;
+      panY *= ratio;
+    }
+
+    viewScale = newScale;
+    applyImageTransform();
+  }
+
+  function resetPan(){
+    panX = 0;
+    panY = 0;
+    applyImageTransform();
+  }
+
+  function canPan(){
+    if (!items.length || $('image').style.display === 'none') return false;
+    const {maxX,maxY} = getPanBounds();
+    return maxX > 0 || maxY > 0;
+  }
+
+  function updatePixelControls(){
+    $('pixel11').classList.toggle('active', viewMode === 'pixel');
+  }
+
+  function setFitView(){
+    viewMode = 'fit';
+    viewScale = 1;
+    panX = 0;
+    panY = 0;
+    applyFitBaseStyle();
+    applyImageTransform();
+    updatePixelControls();
+  }
+
+  function enterPixelOneToOne(showToast=true){
+    if (!items.length) return;
+    viewMode = 'pixel';
+    viewScale = 1;
+    const img = $('image');
+    img.style.maxWidth = 'none';
+    img.style.maxHeight = 'none';
+    img.style.width = `${img.naturalWidth}px`;
+    img.style.height = `${img.naturalHeight}px`;
+    panX = 0;
+    panY = 0;
+    applyImageTransform();
+    updatePixelControls();
+    if (showToast) toast('1:1 原始像素 · 可继续滚轮缩放并拖动查看');
+  }
+
+  function togglePixelOneToOne(){
+    if (!items.length) return;
+    if (viewMode === 'pixel'){
+      setFitView();
+      toast('已返回适应窗口');
+    }else{
+      enterPixelOneToOne(true);
+    }
+  }
+
+
+  function isReviewedCategory(value){
+    return value === 3 || value === 3.5 || value === 4 || value === '重复';
+  }
+
+  function ratingDisplay(value){
+    if (value === '重复') return '重复';
+    if (value === 3 || value === 3.5 || value === 4) return `${value} 分`;
+    return '未评分';
+  }
+
+  function calculateRatingCounts(){
+    let c3=0,c35=0,c4=0,cDup=0;
+    for (const item of items){
+      const r = ratings[item.name];
+      if (r === 3) c3++;
+      else if (r === 3.5) c35++;
+      else if (r === 4) c4++;
+      else if (r === '重复') cDup++;
+    }
+    const rated=c3+c35+c4+cDup;
+    return {c3,c35,c4,cDup,unrated:Math.max(0,items.length-rated),rated};
+  }
+
+  function rebuildRatingCounts(){
+    ratingCounts = calculateRatingCounts();
+    return ratingCounts;
+  }
+
+  function countRatings(){
+    return {...ratingCounts};
+  }
+
+  function adjustRatingCount(value,delta){
+    if (value === 3) ratingCounts.c3 += delta;
+    else if (value === 3.5) ratingCounts.c35 += delta;
+    else if (value === 4) ratingCounts.c4 += delta;
+    else if (value === '重复') ratingCounts.cDup += delta;
+    if (isReviewedCategory(value)){
+      ratingCounts.rated += delta;
+      ratingCounts.unrated -= delta;
+    }
+  }
+
+  function applyRatingChange(name,score){
+    const previous = ratings[name];
+    if (previous === score) return false;
+    if (isReviewedCategory(previous)) adjustRatingCount(previous,-1);
+    ratings[name] = score;
+    if (isReviewedCategory(score)) adjustRatingCount(score,1);
+    ratingCounts.c3=Math.max(0,ratingCounts.c3);
+    ratingCounts.c35=Math.max(0,ratingCounts.c35);
+    ratingCounts.c4=Math.max(0,ratingCounts.c4);
+    ratingCounts.cDup=Math.max(0,ratingCounts.cDup);
+    ratingCounts.rated=Math.max(0,Math.min(items.length,ratingCounts.rated));
+    ratingCounts.unrated=Math.max(0,items.length-ratingCounts.rated);
+    return true;
+  }
+
+  function updateStats(){
+    const {c3,c35,c4,cDup,unrated,rated} = ratingCounts;
+    $('stats').innerHTML = `<span>3分 <b>${c3}</b></span><span>3.5分 <b>${c35}</b></span><span>4分 <b>${c4}</b></span><span>重复 <b>${cDup}</b></span><span>未评 <b>${unrated}</b></span>`;
+    $('counter').textContent = items.length ? `${currentIndex+1} / ${items.length}` : '0 / 0';
+    $('progressBar').style.width = items.length ? `${(rated/items.length)*100}%` : '0%';
+    updateRatingActionState();
+    if ($('ratingReviewModal').classList.contains('show')) updateReviewFilterCounts();
+  }
+
+  async function getImageSize(file){
+    if ('createImageBitmap' in window){
+      try{
+        const bmp = await createImageBitmap(file);
+        const out = {width:bmp.width,height:bmp.height};
+        bmp.close?.();
+        return out;
+      }catch(_){ }
+    }
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { const out={width:img.naturalWidth,height:img.naturalHeight}; URL.revokeObjectURL(url); resolve(out); };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve({width:0,height:0}); };
+      img.src = url;
+    });
+  }
+
+
+  // 大图库重命名专用：先读很小的文件头，只有 JPG 头部较复杂时才逐级扩大读取。
+  // 这样常见 PNG / WebP / GIF / BMP 只需读取约 64KB，避免数千张图片固定读取 512KB。
+  function parseTiffOrientation(v, tiffStart, endOffset){
+    try{
+      if (tiffStart + 8 > endOffset) return 1;
+      const b0 = v.getUint8(tiffStart), b1 = v.getUint8(tiffStart+1);
+      const little = b0 === 0x49 && b1 === 0x49;
+      const big = b0 === 0x4D && b1 === 0x4D;
+      if (!little && !big) return 1;
+      if (v.getUint16(tiffStart+2,little) !== 42) return 1;
+      const ifdOffset = v.getUint32(tiffStart+4,little);
+      const ifd = tiffStart + ifdOffset;
+      if (ifd + 2 > endOffset) return 1;
+      const count = v.getUint16(ifd,little);
+      for (let n=0;n<count;n++){
+        const entry = ifd + 2 + n*12;
+        if (entry + 12 > endOffset) break;
+        if (v.getUint16(entry,little) !== 0x0112) continue;
+        const type = v.getUint16(entry+2,little);
+        const amount = v.getUint32(entry+4,little);
+        if (type === 3 && amount >= 1) return v.getUint16(entry+8,little) || 1;
+      }
+    }catch(_){ }
+    return 1;
+  }
+
+  function parseFastImageHeader(buf, ext){
+    const v = new DataView(buf);
+    const u8 = new Uint8Array(buf);
+
+    if (ext === 'png' && v.byteLength >= 24 &&
+        u8[0]===0x89 && u8[1]===0x50 && u8[2]===0x4E && u8[3]===0x47){
+      return {width:v.getUint32(16,false), height:v.getUint32(20,false)};
+    }
+
+    if (ext === 'gif' && v.byteLength >= 10 &&
+        u8[0]===0x47 && u8[1]===0x49 && u8[2]===0x46){
+      return {width:v.getUint16(6,true), height:v.getUint16(8,true)};
+    }
+
+    if (ext === 'bmp' && v.byteLength >= 26 && u8[0]===0x42 && u8[1]===0x4D){
+      return {width:Math.abs(v.getInt32(18,true)), height:Math.abs(v.getInt32(22,true))};
+    }
+
+    if ((ext === 'tif' || ext === 'tiff') && v.byteLength >= 8){
+      try{
+        const b0=u8[0], b1=u8[1];
+        const little = b0===0x49 && b1===0x49;
+        const big = b0===0x4D && b1===0x4D;
+        if (little || big){
+          const magic = v.getUint16(2,little);
+          if (magic === 42){
+            const ifd = v.getUint32(4,little);
+            if (ifd + 2 <= v.byteLength){
+              const count = v.getUint16(ifd,little);
+              let width=0,height=0,orientation=1;
+              for (let n=0;n<count;n++){
+                const entry = ifd + 2 + n*12;
+                if (entry + 12 > v.byteLength) break;
+                const tag = v.getUint16(entry,little);
+                const type = v.getUint16(entry+2,little);
+                const amount = v.getUint32(entry+4,little);
+                if (amount < 1) continue;
+                let value = 0;
+                if (type === 3) value = v.getUint16(entry+8,little);
+                else if (type === 4) value = v.getUint32(entry+8,little);
+                if (tag === 256) width = value;
+                else if (tag === 257) height = value;
+                else if (tag === 274) orientation = value || 1;
+              }
+              if (width && height){
+                if (orientation >= 5 && orientation <= 8) [width,height] = [height,width];
+                return {width,height};
+              }
+            }
+          }
+        }
+      }catch(_){ }
+    }
+
+    if (['heic','heif','avif'].includes(ext) && v.byteLength >= 20){
+      let best = null;
+      for (let i=4;i+16<=u8.length;i++){
+        if (u8[i]===0x69 && u8[i+1]===0x73 && u8[i+2]===0x70 && u8[i+3]===0x65){ // ispe
+          const boxStart = i - 4;
+          const boxSize = v.getUint32(boxStart,false);
+          if (boxSize && boxSize < 20) continue;
+          const width = v.getUint32(i+8,false);
+          const height = v.getUint32(i+12,false);
+          if (!width || !height || width > 100000 || height > 100000) continue;
+          const area = width * height;
+          if (!best || area > best.area) best = {width,height,area};
+        }
+      }
+      if (best) return {width:best.width,height:best.height};
+    }
+
+    if ((ext === 'jpg' || ext === 'jpeg') && v.byteLength >= 4 && u8[0]===0xFF && u8[1]===0xD8){
+      let i = 2;
+      let orientation = 1;
+      while (i + 9 < v.byteLength){
+        if (u8[i] !== 0xFF){ i++; continue; }
+        while (i < v.byteLength && u8[i] === 0xFF) i++;
+        if (i >= v.byteLength) break;
+        const marker = u8[i++];
+        if (marker === 0xD8 || marker === 0xD9 || (marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) continue;
+        if (i + 1 >= v.byteLength) break;
+        const segLen = v.getUint16(i,false);
+        if (segLen < 2 || i + segLen > v.byteLength) break;
+
+        if (marker === 0xE1 && segLen >= 10){
+          const dataStart = i + 2;
+          const dataEnd = i + segLen;
+          if (dataStart + 6 <= dataEnd &&
+              u8[dataStart]===0x45 && u8[dataStart+1]===0x78 && u8[dataStart+2]===0x69 && u8[dataStart+3]===0x66 &&
+              u8[dataStart+4]===0x00 && u8[dataStart+5]===0x00){
+            orientation = parseTiffOrientation(v,dataStart+6,dataEnd);
+          }
+        }
+
+        const isSOF = (marker >= 0xC0 && marker <= 0xC3) ||
+                      (marker >= 0xC5 && marker <= 0xC7) ||
+                      (marker >= 0xC9 && marker <= 0xCB) ||
+                      (marker >= 0xCD && marker <= 0xCF);
+        if (isSOF && segLen >= 7){
+          let width = v.getUint16(i+5,false);
+          let height = v.getUint16(i+3,false);
+          if (orientation >= 5 && orientation <= 8) [width,height] = [height,width];
+          return {width,height};
+        }
+        i += segLen;
+      }
+    }
+
+    if (ext === 'webp' && v.byteLength >= 30 &&
+        String.fromCharCode(...u8.slice(0,4)) === 'RIFF' &&
+        String.fromCharCode(...u8.slice(8,12)) === 'WEBP'){
+      const chunk = String.fromCharCode(...u8.slice(12,16));
+      if (chunk === 'VP8X' && v.byteLength >= 30){
+        const width = 1 + (u8[24] | (u8[25] << 8) | (u8[26] << 16));
+        const height = 1 + (u8[27] | (u8[28] << 8) | (u8[29] << 16));
+        return {width,height};
+      }
+      if (chunk === 'VP8 ' && v.byteLength >= 30 && u8[23]===0x9D && u8[24]===0x01 && u8[25]===0x2A){
+        return {width:v.getUint16(26,true)&0x3FFF, height:v.getUint16(28,true)&0x3FFF};
+      }
+      if (chunk === 'VP8L' && v.byteLength >= 25 && u8[20]===0x2F){
+        const bits = v.getUint32(21,true);
+        return {width:1 + (bits & 0x3FFF), height:1 + ((bits >> 14) & 0x3FFF)};
+      }
+    }
+    return null;
+  }
+
+  async function getImageSizeFast(file, fileName=''){
+    const ext = extOf(fileName || file.name || '');
+    try{
+      const sizes = (ext === 'jpg' || ext === 'jpeg' || ['heic','heif','avif'].includes(ext))
+        ? [64*1024, 256*1024, 1024*1024]
+        : ['tif','tiff'].includes(ext) ? [64*1024, 256*1024]
+        : ['png','gif','bmp','webp'].includes(ext) ? [64*1024] : [];
+      let lastSize = -1;
+      for (const wanted of sizes){
+        const headSize = Math.min(file.size || 0, wanted);
+        if (headSize <= 0 || headSize === lastSize) continue;
+        lastSize = headSize;
+        const buf = await file.slice(0, headSize).arrayBuffer();
+        const parsed = parseFastImageHeader(buf,ext);
+        if (parsed?.width && parsed?.height) return parsed;
+        if (headSize >= (file.size || 0)) break;
+      }
+    }catch(_){ }
+
+    // AVIF / HEIC / TIFF 或少数特殊编码回退。createImageBitmap 完成后立即 close，避免位图驻留。
+    return await getImageSize(file);
+  }
+
+  async function scanDirectory(stateOverride=null){
+    if (!dirHandle) return;
+    $('folderStatus').textContent = '正在扫描图片…';
+    $('pickBtn').disabled = true;
+    $('exportBtn').disabled = true;
+    $('ratingReviewBtn').disabled = true;
+    $('jumpUnratedBtn').disabled = true;
+    items = [];
+    let folderOrder = 0;
+
+    try{
+      for await (const [name, handle] of dirHandle.entries()){
+        if (handle.kind !== 'file') continue;
+        const ext = extOf(name);
+        if (!IMAGE_EXT.has(ext)) continue;
+        try{
+          const file = await handle.getFile();
+          folderOrder++;
+          items.push({name,handle,size:file.size,lastModified:file.lastModified,width:0,height:0,folderOrder});
+        }catch(e){ console.warn('读取失败', name, e); }
+      }
+      items.sort((a,b) => a.name.localeCompare(b.name,'zh-CN',{numeric:true,sensitivity:'base'}));
+      storageKey = makeStorageKey();
+      if (stateOverride && typeof stateOverride === 'object'){
+        ratings = stateOverride.ratings && typeof stateOverride.ratings === 'object' ? stateOverride.ratings : {};
+        const targetName = stateOverride.currentName || '';
+        const idx = targetName ? items.findIndex(x => x.name === targetName) : -1;
+        currentIndex = idx >= 0 ? idx : 0;
+      } else {
+        loadState();
+      }
+      rebuildRatingCounts();
+      $('folderStatus').textContent = `已选择：${dirHandle.name} · ${items.length} 张`;
+      $('resetBtn').disabled = !items.length;
+      updateRatingActionState();
+      for (const id of ['rate3','rate35','rate4','rateDup']) $(id).disabled = !items.length;
+      await showCurrent();
+    }catch(err){
+      console.error(err);
+      alert('扫描失败：' + (err?.message || err));
+      $('folderStatus').textContent = '扫描失败';
+    }finally{
+      $('pickBtn').disabled = false;
+      updateStats();
+    }
+  }
+
+  async function pickDirectory(){
+    if (fileOperationBusy) return;
+    flushStateSave();
+    clearViewerPreload();
+    if (!('showDirectoryPicker' in window)){
+      alert('当前浏览器不支持直接读取本地文件夹。\n\n请在 Mac 上使用最新版 Chrome 或 Edge 双击打开这个 HTML 文件。');
+      return;
+    }
+    try{
+      dirHandle = await window.showDirectoryPicker({mode:'readwrite'});
+      await scanDirectory();
+    }catch(err){
+      if (err?.name !== 'AbortError'){
+        console.error(err);
+        alert('选择文件夹失败：' + (err?.message || err));
+      }
+    }
+  }
+
+  function ensureViewerItemSize(item,file){
+    if (!item || !file || (item.width && item.height)) return Promise.resolve(item);
+    if (item._viewerSizePromise) return item._viewerSizePromise;
+    item._viewerSizePromise = getImageSizeFast(file,item.name)
+      .then(size=>{
+        if (size?.width && size?.height){ item.width=size.width; item.height=size.height; }
+        return item;
+      })
+      .catch(()=>item)
+      .finally(()=>{ item._viewerSizePromise=null; });
+    return item._viewerSizePromise;
+  }
+
+  function clearViewerPreload(keepUrl=null){
+    viewerPreloadToken++;
+    const entry = viewerPreload;
+    viewerPreload = null;
+    if (entry?.url && entry.url !== keepUrl){
+      try{ URL.revokeObjectURL(entry.url); }catch(_){ }
+      entry.url = null;
+    }
+  }
+
+  async function prepareViewerPreload(index=currentIndex+1){
+    if (!items.length || index < 0 || index >= items.length){
+      clearViewerPreload();
+      return null;
+    }
+    const item = items[index];
+    if (viewerPreload && viewerPreload.index === index && viewerPreload.name === item.name){
+      return viewerPreload.readyPromise || viewerPreload;
+    }
+
+    clearViewerPreload();
+    const token = viewerPreloadToken;
+    const entry = {index,name:item.name,file:null,url:null,image:null,readyPromise:null};
+    viewerPreload = entry;
+    entry.readyPromise = (async()=>{
+      try{
+        const file = await item.handle.getFile();
+        if (viewerPreload !== entry || token !== viewerPreloadToken) return null;
+        entry.file = file;
+
+        const url = URL.createObjectURL(file);
+        if (viewerPreload !== entry || token !== viewerPreloadToken){ URL.revokeObjectURL(url); return null; }
+        entry.url = url;
+
+        // 尺寸读取与图片解码并行进行，不再阻塞快速评分切换。
+        void ensureViewerItemSize(item,file);
+
+        // 使用与主查看器相同的 ObjectURL 提前触发浏览器解码；正式显示时直接复用该 URL。
+        const im = new Image();
+        entry.image = im;
+        im.src = url;
+        if (typeof im.decode === 'function') im.decode().catch(()=>{});
+        return entry;
+      }catch(_){
+        if (viewerPreload === entry) clearViewerPreload();
+        return null;
+      }
+    })();
+    return entry.readyPromise;
+  }
+
+  async function showCurrent(){
+    const requestId = ++showRequestId;
+    panX = 0;
+    panY = 0;
+    isDragging = false;
+    $('viewer').classList.remove('dragging');
+
+    if (!items.length){
+      clearViewerPreload();
+      if (currentUrl){ URL.revokeObjectURL(currentUrl); currentUrl=null; }
+      $('image').style.display='none';
+      $('emptyState').style.display='flex';
+      $('imageInfo').style.display='none';
+      $('ratingInfo').style.display='none';
+      updateStats();
+      return;
+    }
+
+    // 每次切换图片都退出 1:1 / 自由缩放，下一张从“适应窗口”开始。
+    setFitView();
+    currentIndex = Math.max(0,Math.min(currentIndex,items.length-1));
+    const item = items[currentIndex];
+
+    if (viewerPreload && (viewerPreload.index !== currentIndex || viewerPreload.name !== item.name)){
+      clearViewerPreload();
+    }
+
+    let file=null, objectUrl=null;
+    const cached = viewerPreload && viewerPreload.index === currentIndex && viewerPreload.name === item.name ? viewerPreload : null;
+    if (cached){
+      try{ await cached.readyPromise; }catch(_){ }
+      if (requestId !== showRequestId) return;
+      if (viewerPreload === cached && cached.file && cached.url){
+        file = cached.file;
+        objectUrl = cached.url;
+        cached.url = null;
+        viewerPreload = null;
+      }
+    }
+
+    if (!file){
+      try{ file = await item.handle.getFile(); }
+      catch(e){
+        if (requestId !== showRequestId) return;
+        $('emptyState').style.display='flex';
+        $('emptyState').innerHTML='<b>图片读取失败</b><span>文件可能已被移动或删除，请重新选择文件夹。</span>';
+        return;
+      }
+      if (requestId !== showRequestId) return;
+    }
+
+    if (!objectUrl) objectUrl = URL.createObjectURL(file);
+    if (requestId !== showRequestId){ URL.revokeObjectURL(objectUrl); return; }
+    if (currentUrl){ URL.revokeObjectURL(currentUrl); currentUrl=null; }
+    currentUrl = objectUrl;
+    const img = $('image');
+    img.onload = () => {
+      if (requestId !== showRequestId || currentUrl !== objectUrl) return;
+      $('emptyState').style.display='none';
+      img.style.display='block';
+      if (viewMode === 'pixel') enterPixelOneToOne(false);
+      else setFitView();
+    };
+    img.onerror = () => {
+      if (requestId !== showRequestId || currentUrl !== objectUrl) return;
+      img.style.display='none';
+      $('emptyState').style.display='flex';
+      $('emptyState').innerHTML='<b>浏览器无法显示此格式</b><span>该文件仍会被扫描，但 HEIC / TIFF 等格式是否可预览取决于浏览器支持。</span>';
+    };
+    img.src = objectUrl;
+
+    if (requestId !== showRequestId) return;
+    const sizeText = item.width && item.height ? `${item.width} × ${item.height}` : '尺寸未知';
+    $('imageInfo').style.display='block';
+    $('imageInfo').textContent = `${item.name}  ·  ${sizeText}  ·  ${humanBytes(file.size)}`;
+    if (!item.width || !item.height){
+      void ensureViewerItemSize(item,file).then(()=>{
+        if (requestId !== showRequestId || items[currentIndex]?.name !== item.name) return;
+        const resolved = item.width && item.height ? `${item.width} × ${item.height}` : '尺寸未知';
+        $('imageInfo').textContent = `${item.name}  ·  ${resolved}  ·  ${humanBytes(file.size)}`;
+      });
+    }
+    $('ratingInfo').style.display='block';
+    $('ratingInfo').textContent = `当前分类：${ratingDisplay(ratings[item.name])}`;
+    updateStats();
+    saveState();
+
+    // 主图一旦切换完成，立即准备下一张；评分热路径不再重复调用无效预加载。
+    preloadNext();
+  }
+
+  function preloadNext(){
+    void prepareViewerPreload(currentIndex+1);
+  }
+
+  function queueViewerAction(action){
+    viewerQueuedCount++;
+    viewerActionQueue = viewerActionQueue
+      .then(() => action())
+      .catch(err => { console.error('查看器操作失败',err); })
+      .finally(() => { viewerQueuedCount = Math.max(0,viewerQueuedCount-1); });
+    return viewerActionQueue;
+  }
+
+  async function go(delta){
+    if (!items.length) return;
+    currentIndex = Math.max(0,Math.min(items.length-1,currentIndex+delta));
+    await showCurrent();
+  }
+
+  async function setRating(score){
+    if (!items.length || fileOperationBusy) return;
+    const item = items[currentIndex];
+    applyRatingChange(item.name,score);
+    $('ratingInfo').textContent = `当前分类：${ratingDisplay(score)}`;
+    updateStats();
+    if (currentIndex < items.length-1){
+      currentIndex++;
+      saveState();
+      await showCurrent();
+    }else{
+      saveState();
+      toast('已评分，当前是最后一张');
+    }
+  }
+
+  function setRatingForName(name, score, {deferReviewRender=false}={}){
+    if (fileOperationBusy || !items.length) return;
+    const item = items.find(x => x.name === name);
+    if (!item) return;
+    applyRatingChange(name,score);
+    if (items[currentIndex]?.name === name){
+      $('ratingInfo').textContent = `当前分类：${ratingDisplay(score)}`;
+    }
+    saveState();
+    const keepCount = Math.max(REVIEW_BATCH_SIZE, reviewRenderedCount || 0);
+    updateStats();
+    if (!deferReviewRender && $('ratingReviewModal').classList.contains('show')) renderRatingReview(keepCount);
+  }
+
+  function clearReviewObjectUrls(){
+    for (const url of reviewObjectUrls) URL.revokeObjectURL(url);
+    reviewObjectUrls.clear();
+  }
+
+  function reviewMatches(item, filter=reviewFilter){
+    if (filter === 'all') return true;
+    const value = ratings[item.name];
+    if (filter === 'unrated') return !isReviewedCategory(value);
+    if (filter === '重复') return value === '重复';
+    return value === Number(filter);
+  }
+
+  function getFilteredReviewItems(){
+    return items.filter(item => reviewMatches(item));
+  }
+
+  function updateReviewFilterCounts(){
+    const {c3,c35,c4,cDup,unrated} = countRatings();
+    $('reviewCountAll').textContent = items.length;
+    $('reviewCount3').textContent = c3;
+    $('reviewCount35').textContent = c35;
+    $('reviewCount4').textContent = c4;
+    $('reviewCountDup').textContent = cDup;
+    $('reviewCountUnrated').textContent = unrated;
+    $('ratingReviewJumpUnrated').disabled = unrated === 0;
+  }
+
+  async function loadReviewThumbnail(item, img, errorEl, token){
+    try{
+      const file = await item.handle.getFile();
+      if (token !== reviewRenderToken || !$('ratingReviewModal').classList.contains('show')) return;
+      const url = URL.createObjectURL(file);
+      if (token !== reviewRenderToken || !$('ratingReviewModal').classList.contains('show')){
+        URL.revokeObjectURL(url);
+        return;
+      }
+      reviewObjectUrls.add(url);
+      img.onload = () => { errorEl.style.display='none'; };
+      img.onerror = () => { img.style.display='none'; errorEl.style.display='block'; };
+      img.src = url;
+    }catch(_){
+      if (token === reviewRenderToken) errorEl.style.display='block';
+    }
+  }
+
+  function createReviewCard(item, token){
+    const card = document.createElement('div');
+    card.className = 'review-item';
+    card.dataset.itemName = item.name;
+
+    const thumb = document.createElement('div');
+    thumb.className = 'review-thumb';
+    thumb.title = '点击在预览内打开大图复查';
+    const img = document.createElement('img');
+    img.alt = item.name;
+    img.loading = 'lazy';
+    const errorEl = document.createElement('span');
+    errorEl.className = 'review-thumb-error';
+    errorEl.textContent = '浏览器无法预览';
+    thumb.append(img,errorEl);
+
+    const body = document.createElement('div');
+    body.className = 'review-item-body';
+    const name = document.createElement('div');
+    name.className = 'review-name';
+    name.title = item.name;
+    name.textContent = item.name;
+
+    const line = document.createElement('div');
+    line.className = 'review-rating-line';
+    const dims = document.createElement('span');
+    dims.textContent = item.width && item.height ? `${item.width}×${item.height}` : humanBytes(item.size);
+    const badge = document.createElement('span');
+    const current = ratings[item.name];
+    badge.className = 'review-rating-badge' + (isReviewedCategory(current) ? '' : ' unrated');
+    badge.textContent = ratingDisplay(current);
+    line.append(dims,badge);
+
+    const actions = document.createElement('div');
+    actions.className = 'review-rate-actions';
+    const choices = [[3,'3'],[3.5,'3.5'],[4,'4'],['重复','重复']];
+    for (const [score,label] of choices){
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.dataset.reviewScore = String(score);
+      if (current === score) btn.classList.add('active');
+      actions.appendChild(btn);
+    }
+    body.append(name,line,actions);
+    card.append(thumb,body);
+
+    thumb.addEventListener('click',e=>{
+      e.preventDefault();
+      openReviewLightbox(item.name);
+    });
+    loadReviewThumbnail(item,img,errorEl,token);
+    return card;
+  }
+
+  function renderRatingReview(limit=REVIEW_BATCH_SIZE){
+    if (!$('ratingReviewModal').classList.contains('show')) return;
+    clearReviewObjectUrls();
+    const token = ++reviewRenderToken;
+    const filtered = getFilteredReviewItems();
+    reviewRenderedCount = Math.min(Math.max(REVIEW_BATCH_SIZE,limit), filtered.length);
+    const grid = $('ratingReviewGrid');
+    grid.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    for (const item of filtered.slice(0,reviewRenderedCount)) frag.appendChild(createReviewCard(item,token));
+    grid.appendChild(frag);
+    $('ratingReviewEmpty').style.display = filtered.length ? 'none' : 'block';
+    $('ratingReviewSummary').textContent = `当前筛选 ${filtered.length} 张 · 已显示 ${reviewRenderedCount} 张 · 点击缩略图可原地大图复查`;
+    $('ratingReviewLoadMore').style.display = reviewRenderedCount < filtered.length ? 'inline-block' : 'none';
+    updateReviewFilterCounts();
+    for (const btn of $('ratingReviewFilters').querySelectorAll('[data-review-filter]')){
+      btn.classList.toggle('active', btn.dataset.reviewFilter === reviewFilter);
+    }
+  }
+
+  function appendRatingReviewBatch(){
+    const filtered = getFilteredReviewItems();
+    if (reviewRenderedCount >= filtered.length) return;
+    const token = reviewRenderToken;
+    const start = reviewRenderedCount;
+    const end = Math.min(start + REVIEW_BATCH_SIZE, filtered.length);
+    const frag = document.createDocumentFragment();
+    for (const item of filtered.slice(start,end)) frag.appendChild(createReviewCard(item,token));
+    $('ratingReviewGrid').appendChild(frag);
+    reviewRenderedCount = end;
+    $('ratingReviewSummary').textContent = `当前筛选 ${filtered.length} 张 · 已显示 ${reviewRenderedCount} 张 · 点击缩略图可原地大图复查`;
+    $('ratingReviewLoadMore').style.display = reviewRenderedCount < filtered.length ? 'inline-block' : 'none';
+  }
+
+  function getReviewItemByName(name){
+    return items.find(x => x.name === name) || null;
+  }
+
+  function revokeReviewLightboxUrl(){
+    if (reviewLightboxUrl){
+      URL.revokeObjectURL(reviewLightboxUrl);
+      reviewLightboxUrl = null;
+    }
+  }
+
+  function setReviewLightboxFitView(){
+    reviewLightboxMode = 'fit';
+    reviewLightboxScale = 1;
+    reviewLightboxPanX = 0;
+    reviewLightboxPanY = 0;
+    const img = $('ratingReviewLightboxImage');
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '100%';
+    img.style.width = 'auto';
+    img.style.height = 'auto';
+    applyReviewLightboxTransform();
+    $('ratingReviewLightboxPixel').classList.remove('active');
+  }
+
+  function setReviewLightboxOneToOne(){
+    const img = $('ratingReviewLightboxImage');
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    reviewLightboxMode = 'pixel';
+    reviewLightboxScale = 1;
+    reviewLightboxPanX = 0;
+    reviewLightboxPanY = 0;
+    img.style.maxWidth = 'none';
+    img.style.maxHeight = 'none';
+    img.style.width = `${img.naturalWidth}px`;
+    img.style.height = `${img.naturalHeight}px`;
+    applyReviewLightboxTransform();
+    $('ratingReviewLightboxPixel').classList.add('active');
+  }
+
+  function toggleReviewLightboxOneToOne(){
+    if (!reviewLightboxOpen) return;
+    if (reviewLightboxMode === 'pixel') setReviewLightboxFitView();
+    else setReviewLightboxOneToOne();
+  }
+
+  function getReviewLightboxPanBounds(){
+    const img = $('ratingReviewLightboxImage');
+    const stage = $('ratingReviewLightboxStage');
+    if (!img.offsetWidth || !img.offsetHeight) return {maxX:0,maxY:0};
+    const shownW = img.offsetWidth * reviewLightboxScale;
+    const shownH = img.offsetHeight * reviewLightboxScale;
+    return {
+      maxX: Math.max(0,(shownW-stage.clientWidth)/2),
+      maxY: Math.max(0,(shownH-stage.clientHeight)/2)
+    };
+  }
+
+  function clampReviewLightboxPan(){
+    const {maxX,maxY} = getReviewLightboxPanBounds();
+    reviewLightboxPanX = Math.max(-maxX,Math.min(maxX,reviewLightboxPanX));
+    reviewLightboxPanY = Math.max(-maxY,Math.min(maxY,reviewLightboxPanY));
+  }
+
+  function applyReviewLightboxTransform(){
+    const img = $('ratingReviewLightboxImage');
+    clampReviewLightboxPan();
+    img.style.transform = `translate(${reviewLightboxPanX}px, ${reviewLightboxPanY}px) scale(${reviewLightboxScale})`;
+  }
+
+  function setReviewLightboxScale(nextScale,anchorClientX=null,anchorClientY=null){
+    if (!reviewLightboxOpen || $('ratingReviewLightboxImage').style.display === 'none') return;
+    const oldScale = reviewLightboxScale;
+    const newScale = Math.min(10,Math.max(0.1,Number(nextScale) || oldScale));
+    if (Math.abs(newScale-oldScale)<0.0001) return;
+    if (Number.isFinite(anchorClientX) && Number.isFinite(anchorClientY) && oldScale>0){
+      const rect = $('ratingReviewLightboxStage').getBoundingClientRect();
+      const cx = anchorClientX-(rect.left+rect.width/2);
+      const cy = anchorClientY-(rect.top+rect.height/2);
+      const localX = (cx-reviewLightboxPanX)/oldScale;
+      const localY = (cy-reviewLightboxPanY)/oldScale;
+      reviewLightboxPanX = cx-localX*newScale;
+      reviewLightboxPanY = cy-localY*newScale;
+    }else if (oldScale>0){
+      const ratio = newScale/oldScale;
+      reviewLightboxPanX *= ratio;
+      reviewLightboxPanY *= ratio;
+    }
+    reviewLightboxScale = newScale;
+    applyReviewLightboxTransform();
+  }
+
+  function resetReviewLightboxPan(){
+    reviewLightboxPanX = 0;
+    reviewLightboxPanY = 0;
+    applyReviewLightboxTransform();
+  }
+
+  function canPanReviewLightbox(){
+    const {maxX,maxY} = getReviewLightboxPanBounds();
+    return maxX>0 || maxY>0;
+  }
+
+  function updateReviewLightboxRatingUI(){
+    const name = reviewLightboxNames[reviewLightboxIndex];
+    const item = getReviewItemByName(name);
+    if (!item) return;
+    const current = ratings[name];
+    $('ratingReviewLightboxName').textContent = item.name;
+    const dims = item.width && item.height ? `${item.width} × ${item.height}` : '尺寸未知';
+    $('ratingReviewLightboxMeta').textContent = `${reviewLightboxIndex+1} / ${reviewLightboxNames.length} · ${dims} · ${humanBytes(item.size)}`;
+    $('ratingReviewLightboxRating').textContent = ratingDisplay(current);
+    for (const btn of $('ratingReviewLightboxRateActions').querySelectorAll('[data-review-lightbox-score]')){
+      const raw = btn.dataset.reviewLightboxScore;
+      const score = raw === '重复' ? '重复' : Number(raw);
+      btn.classList.toggle('active',current===score);
+    }
+    $('ratingReviewLightboxPrev').disabled = reviewLightboxIndex<=0;
+    $('ratingReviewLightboxNext').disabled = reviewLightboxIndex>=reviewLightboxNames.length-1;
+  }
+
+  async function loadReviewLightboxIndex(index){
+    if (!reviewLightboxOpen || !reviewLightboxNames.length) return;
+    reviewLightboxIndex = Math.max(0,Math.min(reviewLightboxNames.length-1,index));
+    const name = reviewLightboxNames[reviewLightboxIndex];
+    const item = getReviewItemByName(name);
+    if (!item) return;
+    const token = ++reviewLightboxLoadToken;
+    revokeReviewLightboxUrl();
+    const img = $('ratingReviewLightboxImage');
+    const errorEl = $('ratingReviewLightboxError');
+    img.style.display = 'none';
+    img.removeAttribute('src');
+    errorEl.style.display = 'block';
+    errorEl.textContent = '正在读取图片…';
+    reviewLightboxMode = 'fit';
+    reviewLightboxScale = 1;
+    reviewLightboxPanX = 0;
+    reviewLightboxPanY = 0;
+    $('ratingReviewLightboxPixel').classList.remove('active');
+    updateReviewLightboxRatingUI();
+    try{
+      const file = await item.handle.getFile();
+      if (!reviewLightboxOpen || token!==reviewLightboxLoadToken) return;
+      const url = URL.createObjectURL(file);
+      if (!reviewLightboxOpen || token!==reviewLightboxLoadToken){ URL.revokeObjectURL(url); return; }
+      reviewLightboxUrl = url;
+      img.onload = ()=>{
+        if (!reviewLightboxOpen || token!==reviewLightboxLoadToken) return;
+        errorEl.style.display='none';
+        img.style.display='block';
+        setReviewLightboxFitView();
+      };
+      img.onerror = ()=>{
+        if (!reviewLightboxOpen || token!==reviewLightboxLoadToken) return;
+        img.style.display='none';
+        errorEl.style.display='block';
+        errorEl.textContent='浏览器无法显示此图片格式';
+      };
+      img.src = url;
+    }catch(err){
+      if (!reviewLightboxOpen || token!==reviewLightboxLoadToken) return;
+      errorEl.style.display='block';
+      errorEl.textContent=`读取失败：${err?.message || err}`;
+    }
+  }
+
+  function openReviewLightbox(name){
+    if (!$('ratingReviewModal').classList.contains('show')) return;
+    const filtered = getFilteredReviewItems();
+    reviewLightboxNames = filtered.map(x=>x.name);
+    const idx = reviewLightboxNames.indexOf(name);
+    if (idx<0) return;
+    reviewLightboxReturnScrollTop = $('ratingReviewScroll').scrollTop;
+    reviewLightboxReturnRenderedCount = Math.max(REVIEW_BATCH_SIZE,reviewRenderedCount || 0);
+    reviewLightboxDirty = false;
+    reviewLightboxOpen = true;
+    $('ratingReviewLightbox').classList.add('show');
+    $('ratingReviewLightbox').setAttribute('aria-hidden','false');
+    loadReviewLightboxIndex(idx);
+  }
+
+  function navigateReviewLightbox(delta){
+    if (!reviewLightboxOpen) return;
+    const next = Math.max(0,Math.min(reviewLightboxNames.length-1,reviewLightboxIndex+delta));
+    if (next===reviewLightboxIndex) return;
+    loadReviewLightboxIndex(next);
+  }
+
+  function setReviewLightboxRating(score){
+    if (!reviewLightboxOpen) return;
+    const name = reviewLightboxNames[reviewLightboxIndex];
+    if (!name) return;
+    setRatingForName(name,score,{deferReviewRender:true});
+    reviewLightboxDirty = true;
+    updateReviewLightboxRatingUI();
+  }
+
+  function updateReviewCardRatingUI(card,item){
+    if (!card || !item) return;
+    const current = ratings[item.name];
+    const badge = card.querySelector('.review-rating-badge');
+    if (badge){
+      badge.className = 'review-rating-badge'+(isReviewedCategory(current)?'':' unrated');
+      badge.textContent = ratingDisplay(current);
+    }
+    for (const btn of card.querySelectorAll('[data-review-score]')){
+      const raw = btn.dataset.reviewScore;
+      const score = raw==='重复'?'重复':Number(raw);
+      btn.classList.toggle('active',current===score);
+    }
+  }
+
+  function refreshReviewGridAfterLightbox(){
+    const grid = $('ratingReviewGrid');
+    const targetCount = Math.max(REVIEW_BATCH_SIZE,reviewLightboxReturnRenderedCount || reviewRenderedCount || 0);
+    const filtered = getFilteredReviewItems();
+    const visibleNames = new Set();
+    for (const card of [...grid.querySelectorAll('.review-item')]){
+      const item = getReviewItemByName(card.dataset.itemName);
+      if (!item || !reviewMatches(item)){
+        card.remove();
+        continue;
+      }
+      visibleNames.add(item.name);
+      updateReviewCardRatingUI(card,item);
+    }
+    const token = reviewRenderToken;
+    for (const item of filtered){
+      if (grid.children.length>=Math.min(targetCount,filtered.length)) break;
+      if (visibleNames.has(item.name)) continue;
+      grid.appendChild(createReviewCard(item,token));
+      visibleNames.add(item.name);
+    }
+    reviewRenderedCount = grid.querySelectorAll('.review-item').length;
+    $('ratingReviewEmpty').style.display = filtered.length?'none':'block';
+    $('ratingReviewSummary').textContent = `当前筛选 ${filtered.length} 张 · 已显示 ${reviewRenderedCount} 张 · 点击缩略图可原地大图复查`;
+    $('ratingReviewLoadMore').style.display = reviewRenderedCount<filtered.length?'inline-block':'none';
+    updateReviewFilterCounts();
+  }
+
+  function closeReviewLightbox({refresh=true}={}){
+    if (!reviewLightboxOpen) return;
+    reviewLightboxOpen = false;
+    reviewLightboxLoadToken++;
+    revokeReviewLightboxUrl();
+    $('ratingReviewLightbox').classList.remove('show');
+    $('ratingReviewLightbox').setAttribute('aria-hidden','true');
+    $('ratingReviewLightboxImage').style.display='none';
+    $('ratingReviewLightboxStage').classList.remove('dragging');
+    reviewLightboxDragging = false;
+    if (refresh && reviewLightboxDirty) refreshReviewGridAfterLightbox();
+    const returnScroll = reviewLightboxReturnScrollTop;
+    requestAnimationFrame(()=>{ $('ratingReviewScroll').scrollTop = returnScroll; });
+    reviewLightboxNames = [];
+    reviewLightboxIndex = -1;
+    reviewLightboxDirty = false;
+  }
+
+  function clampReviewCardSize(value){
+    const n = Number(value);
+    if (!Number.isFinite(n)) return REVIEW_SIZE_DEFAULT;
+    return Math.max(REVIEW_SIZE_MIN, Math.min(REVIEW_SIZE_MAX, Math.round(n / 20) * 20));
+  }
+
+  function applyReviewCardSize(value, persist=true){
+    const size = clampReviewCardSize(value);
+    $('ratingReviewModal').style.setProperty('--review-card-width', `${size}px`);
+    const card = $('ratingReviewModal').querySelector('.review-card');
+    card?.style.setProperty('--review-card-width', `${size}px`);
+    $('ratingReviewSize').value = String(size);
+    $('ratingReviewSizeValue').textContent = `${size}px`;
+    if (persist){
+      try{ localStorage.setItem(REVIEW_SIZE_STORAGE_KEY, String(size)); }catch(_){ }
+    }
+  }
+
+  function loadReviewCardSize(){
+    let saved = REVIEW_SIZE_DEFAULT;
+    try{ saved = Number(localStorage.getItem(REVIEW_SIZE_STORAGE_KEY)) || REVIEW_SIZE_DEFAULT; }catch(_){ }
+    applyReviewCardSize(saved,false);
+  }
+
+  function setRatingReviewFullscreen(active){
+    const modal = $('ratingReviewModal');
+    const next = Boolean(active);
+    modal.classList.toggle('review-fullscreen', next);
+    $('ratingReviewFullscreenBtn').classList.toggle('active', next);
+    $('ratingReviewFullscreenBtn').innerHTML = next ? `退出全屏 <span class="kbd">F</span>` : `全屏 <span class="kbd">F</span>`;
+  }
+
+  function toggleRatingReviewFullscreen(){
+    if (!$('ratingReviewModal').classList.contains('show')) return;
+    setRatingReviewFullscreen(!$('ratingReviewModal').classList.contains('review-fullscreen'));
+  }
+
+  function openRatingReview(){
+    if (fileOperationBusy || !items.length) return;
+    reviewFilter = 'all';
+    reviewRenderedCount = 0;
+    loadReviewCardSize();
+    setRatingReviewFullscreen(false);
+    $('ratingReviewModal').classList.add('show');
+    $('ratingReviewScroll').scrollTop = 0;
+    renderRatingReview(REVIEW_BATCH_SIZE);
+  }
+
+  function closeRatingReview(){
+    if (reviewLightboxOpen) closeReviewLightbox({refresh:false});
+    setRatingReviewFullscreen(false);
+    $('ratingReviewModal').classList.remove('show');
+    reviewRenderToken++;
+    clearReviewObjectUrls();
+    $('ratingReviewGrid').innerHTML = '';
+    reviewRenderedCount = 0;
+  }
+
+  function setReviewFilter(filter){
+    reviewFilter = filter;
+    $('ratingReviewScroll').scrollTop = 0;
+    renderRatingReview(REVIEW_BATCH_SIZE);
+  }
+
+  function jumpToReviewItem(name){
+    const idx = items.findIndex(x => x.name === name);
+    if (idx < 0) return;
+    closeRatingReview();
+    queueViewerAction(async()=>{
+      currentIndex = idx;
+      saveState();
+      await showCurrent();
+    });
+  }
+
+  function jumpToFirstUnrated(){
+    const idx = items.findIndex(x => !isReviewedCategory(ratings[x.name]));
+    if (idx < 0){ toast('所有图片都已评分'); return; }
+    if ($('ratingReviewModal').classList.contains('show')) closeRatingReview();
+    queueViewerAction(async()=>{
+      currentIndex = idx;
+      saveState();
+      await showCurrent();
+    });
+  }
+
+  async function verifyDirectoryPermission(handle){
+    if (!handle) return false;
+    const opts={mode:'readwrite'};
+    if ((await handle.queryPermission(opts)) === 'granted') return true;
+    return (await handle.requestPermission(opts)) === 'granted';
+  }
+
+  async function verifyPermission(){
+    return await verifyDirectoryPermission(dirHandle);
+  }
+
+  async function copyFile(targetDirHandle, name, file){
+    const target = await targetDirHandle.getFileHandle(name,{create:true});
+    const writable = await target.createWritable();
+    try{
+      // Chrome 官方建议可将 ReadableStream 直接 pipe 到 FileSystemWritableFileStream。
+      // 大图片用流式复制可避免把整张 Blob 作为一次 write 压进写入管线，降低峰值内存压力。
+      if (file?.stream && typeof writable?.getWriter === 'function'){
+        await file.stream().pipeTo(writable);
+      }else{
+        await writable.write(file);
+        await writable.close();
+      }
+    }catch(err){
+      try{ await writable.abort?.(); }catch(_){ }
+      // 当前目标未通过完整性判断，写入失败后删除可能留下的 0 字节/半成品文件，
+      // 这样下一次断点续导不会把损坏占位文件误当成结果。
+      try{ await targetDirHandle.removeEntry(name); }catch(_){ }
+      throw err;
+    }
+  }
+
+  async function getExistingFile(folderHandle,name){
+    try{
+      const handle = await folderHandle.getFileHandle(name);
+      return await handle.getFile();
+    }catch(err){
+      if (err?.name === 'NotFoundError') return null;
+      throw err;
+    }
+  }
+
+  async function targetAlreadyComplete(folderHandle,item){
+    const existing = await getExistingFile(folderHandle,item.name);
+    if (!existing) return false;
+    // 断点续导只跳过尺寸完全一致的同名文件；0 字节/中断写入会自动重写。
+    return existing.size === item.size;
+  }
+
+  async function verifyExportedFile(folderHandle,item){
+    const copied = await getExistingFile(folderHandle,item.name);
+    if (!copied || copied.size !== item.size){
+      throw new Error(`导出校验失败：${item.name}（源文件 ${item.size} B，目标文件 ${copied?.size ?? 0} B）`);
+    }
+  }
+
+  async function cleanupExportFolder(folderHandle, expectedNames){
+    const remove=[];
+    for await (const [name,handle] of folderHandle.entries()){
+      if (!expectedNames.has(name)) remove.push({name,recursive:handle.kind === 'directory'});
+    }
+    for (const entry of remove){
+      await folderHandle.removeEntry(entry.name,{recursive:entry.recursive});
+      await yieldToBrowser();
+    }
+  }
+
+  async function verifyExportFolderExact(folderHandle, expectedItems, folderName){
+    const expectedByName = new Map(expectedItems.map(item => [item.name,item]));
+    let actualCount = 0;
+    for await (const [name,handle] of folderHandle.entries()){
+      if (handle.kind !== 'file'){
+        throw new Error(`导出校验失败：${folderName} 中存在非图片文件夹项 ${name}`);
+      }
+      const item = expectedByName.get(name);
+      if (!item){
+        throw new Error(`导出校验失败：${folderName} 中存在多余文件 ${name}`);
+      }
+      const copied = await handle.getFile();
+      if (copied.size !== item.size){
+        throw new Error(`导出校验失败：${folderName}/${name} 大小不一致（源 ${item.size} B，目标 ${copied.size} B）`);
+      }
+      actualCount++;
+    }
+    if (actualCount !== expectedItems.length){
+      throw new Error(`导出校验失败：${folderName} 应有 ${expectedItems.length} 张，实际完整文件 ${actualCount} 张`);
+    }
+    return actualCount;
+  }
+
+  function exportFolderName(score,count){
+    return score === '重复' ? `重复-${count}张` : `${score}分-${count}张`;
+  }
+
+  function openExportModal(){
+    if (fileOperationBusy) return;
+    const {c3,c35,c4,cDup,unrated,rated} = countRatings();
+    if (!items.length){ toast('请先选择图片文件夹'); return; }
+    if (unrated > 0 || rated !== items.length){
+      alert(`还有 ${unrated} 张图片未评分，必须完成全部图片评分后才能导出。\n\n可点击“评分预览”检查，或点击“查看未评分”直接跳到第一张未评分图片。`);
+      return;
+    }
+    const groups = [];
+    if (c3 > 0) groups.push(`<b>${exportFolderName('3',c3)}</b>`);
+    if (c35 > 0) groups.push(`<b>${exportFolderName('3.5',c35)}</b>`);
+    if (c4 > 0) groups.push(`<b>${exportFolderName('4',c4)}</b>`);
+    if (cDup > 0) groups.push(`<b>${exportFolderName('重复',cDup)}</b>`);
+    $('exportSummary').innerHTML = `已筛选 <b>${rated}</b> 张。将创建：${groups.join('，')}。<br><span style="color:#aaa">图片数量为 0 的分类不会创建文件夹。</span>`;
+    $('exportModal').classList.add('show');
+  }
+
+  async function clearExistingScoreFolders(){
+    const names = [];
+    for await (const [name, handle] of dirHandle.entries()){
+      if (handle.kind !== 'directory') continue;
+      if (!parseScoreFolderName(name)) continue;
+      names.push(name);
+    }
+    for (const name of names){
+      await dirHandle.removeEntry(name,{recursive:true});
+      await yieldToBrowser();
+    }
+    return names;
+  }
+
+  async function executeExport(){
+    if (exportBusy || fileOperationBusy || !dirHandle) return;
+    flushStateSave();
+    const {unrated,rated} = countRatings();
+    if (!items.length || unrated > 0 || rated !== items.length){
+      alert(`导出已阻止：当前还有 ${unrated} 张未评分图片。\n\n请完成全部评分后再导出，避免漏图。`);
+      return;
+    }
+    if (!await verifyPermission()){
+      alert('没有获得文件夹写入权限。');
+      return;
+    }
+    exportBusy=true;
+    setFileOperationBusy(true);
+    $('confirmExport').disabled=true;
+    $('cancelExport').disabled=true;
+    let done=0;
+    let copiedNow=0;
+    let skippedExisting=0;
+    const ratedItems=items.filter(it => isReviewedCategory(ratings[it.name]));
+    try{
+      const grouped = {'3':[], '3.5':[], '4':[], '重复':[]};
+      for (const item of ratedItems){
+        grouped[String(ratings[item.name])].push(item);
+      }
+
+      // 不再在导出开始时删除旧评分目录。
+      // 新导出成功前保留旧结果；若中途失败，已经写好的同名文件会成为下次导出的断点。
+      const targetFolderNames = new Set();
+      const dirs={};
+      for (const score of ['3','3.5','4','重复']){
+        const count = grouped[score].length;
+        if (!count) continue;
+        const folderName = exportFolderName(score,count);
+        targetFolderNames.add(folderName);
+        dirs[score] = await dirHandle.getDirectoryHandle(folderName,{create:true});
+      }
+
+      for (const score of ['3','3.5','4','重复']){
+        const folder = dirs[score];
+        if (!folder) continue;
+        const expectedNames = new Set(grouped[score].map(x=>x.name));
+        for (const item of grouped[score]){
+          if (await targetAlreadyComplete(folder,item)){
+            skippedExisting++;
+            done++;
+            $('confirmExport').textContent=`校验/导出 ${done}/${ratedItems.length}`;
+            continue;
+          }
+          const file=await item.handle.getFile();
+          await copyFile(folder,item.name,file);
+          await verifyExportedFile(folder,item);
+          copiedNow++;
+          done++;
+          $('confirmExport').textContent=`导出中 ${done}/${ratedItems.length}`;
+          if (done % 8 === 0) await yieldToBrowser();
+        }
+        // 只有本分类所有目标文件都确认完整后，才清理该文件夹里的旧残留文件。
+        await cleanupExportFolder(folder, expectedNames);
+        // 清理后再次按实际文件数量与文件大小做整夹校验；只有完全一致才算本分类导出成功。
+        const folderName = exportFolderName(score, grouped[score].length);
+        await verifyExportFolderExact(folder, grouped[score], folderName);
+      }
+
+      // 所有新分类全部完成并通过文件大小校验后，才删除已经过期的旧评分文件夹。
+      const obsolete=[];
+      for await (const [name,handle] of dirHandle.entries()){
+        if (handle.kind !== 'directory') continue;
+        if (!parseScoreFolderName(name)) continue;
+        if (!targetFolderNames.has(name)) obsolete.push(name);
+      }
+      for (const name of obsolete){
+        await dirHandle.removeEntry(name,{recursive:true});
+        await yieldToBrowser();
+      }
+
+      $('exportModal').classList.remove('show');
+      toast(`导出完成：${done} 张`);
+      const exportedFolderList = [...targetFolderNames].join('、');
+      alert(`导出完成：已确认 ${done} 张图片。\n\n导出分类：${exportedFolderList}\n本次新复制 ${copiedNow} 张，断点复用 ${skippedExisting} 张。\n每个分类文件夹的实际完整图片数量已再次校验，原图保持不变。`);
+    }catch(err){
+      console.error(err);
+      const remaining = Math.max(0,ratedItems.length-done);
+      if (err?.name === 'QuotaExceededError'){
+        alert(`导出中断：已确认 ${done}/${ratedItems.length} 张，还有 ${remaining} 张未完成。\n\nChrome 报告写入空间不足或文件系统容量受限（QuotaExceededError）。\n\n已成功导出的文件会保留，不会清空。请先释放目标磁盘空间，然后再次点击“按评分导出分类”，程序会自动跳过已经完整的文件，从缺失位置继续导出。`);
+      }else{
+        alert(`导出中断：已确认 ${done}/${ratedItems.length} 张，还有 ${remaining} 张未完成。\n\n${err?.message || err}\n\n已经完整导出的文件会保留；再次执行导出时会自动跳过已完成文件。`);
+      }
+    }finally{
+      exportBusy=false;
+      setFileOperationBusy(false);
+      $('confirmExport').disabled=false;
+      $('cancelExport').disabled=false;
+      $('confirmExport').textContent='开始导出';
+    }
+  }
+
+  function parseScoreFolderName(folderName){
+    const text = String(folderName ?? '').trim();
+    let match = text.match(/^(3|3\.5|4)分(?:-(\d+)张)?$/);
+    if (match) return {score:match[1], declaredCount:match[2] ? Number(match[2]) : null};
+    match = text.match(/^重复(?:-(\d+)张)?$/);
+    if (match) return {score:'重复', declaredCount:match[1] ? Number(match[1]) : null};
+    return null;
+  }
+
+  function renameScoreRank(score){
+    return score==='3'?0:score==='3.5'?1:score==='4'?2:score==='重复'?3:99;
+  }
+  function sanitizeRenamePart(value){
+    return String(value ?? '').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').replace(/^-+|-+$/g,'').trim();
+  }
+  function normalizeRenameTag(value){
+    return sanitizeRenamePart(value).replace(/\s*-+\s*/g,'+').replace(/\++/g,'+').replace(/^\+|\+$/g,'').trim();
+  }
+  function baseExt(name){
+    const i=name.lastIndexOf('.');
+    return i<0?{base:name,ext:''}:{base:name.slice(0,i),ext:name.slice(i)};
+  }
+  function renameOrientation(w,h){ return w&&h ? (w>=h?'横屏':'竖屏') : '未知'; }
+  function naturalRenameCompare(a,b){ return a.localeCompare(b,'zh-CN',{numeric:true,sensitivity:'base'}); }
+
+  function detectRenameScoreFromFolder(){
+    const scores=[...new Set(renameGroups.map(g=>g.score))];
+    renameDetectedScore=scores.join(' / ');
+    renameDetectedDeclaredCount=null;
+    $('renameScore').value=renameDetectedScore;
+    const hint=$('renameScoreHint');
+    if(!renameDirHandle){
+      hint.textContent='请先在主界面选择图片文件夹；打开后会自动扫描评分子文件夹';
+      hint.classList.remove('bad');
+      return;
+    }
+    if(!renameGroups.length){
+      hint.textContent='当前主目录尚未发现 3分 / 3.5分 / 4分 / 重复 评分子文件夹';
+      hint.classList.add('bad');
+      return;
+    }
+    hint.textContent='已自动识别：'+renameGroups.map(g=>`${g.score}（${g.actualCount ?? 0}张）`).join(' · ');
+    hint.classList.remove('bad');
+  }
+
+  function resolvedRenameDigits(count){
+    const v=$('renameDigits').value;
+    if (v!=='auto') return Number(v)||0;
+    const start=Math.max(0,parseInt($('renameStartNo').value||'1',10));
+    const highest=Math.max(0,start+Math.max(0,count)-1);
+    return Math.max(1,String(highest).length);
+  }
+  function renameDigitCapacityError(count,label='当前分类'){
+    const v=$('renameDigits').value;
+    if (v==='auto'||count<=0) return '';
+    const d=Number(v)||0;
+    if (d<=0) return '';
+    const start=Math.max(0,parseInt($('renameStartNo').value||'1',10));
+    const highest=start+count-1;
+    const max=Math.pow(10,d)-1;
+    return highest>max ? `${label}编号位数不足：${count} 张参与图片，起始编号 ${start}，最高编号 ${highest}；${d} 位编号最大只能到 ${max}，请改为至少 ${String(highest).length} 位或选择“自动”。` : '';
+  }
+  function formatRenameNo(n,d){ return d?String(n).padStart(d,'0'):String(n); }
+  function composeRenameName(score,orientation,no,extension,digits){
+    const sep=$('renameSeparator').value;
+    const parts=[sanitizeRenamePart($('renameType').value),score];
+    const tag=normalizeRenameTag($('renameTag').value);
+    if(tag) parts.push(tag);
+    parts.push(orientation,formatRenameNo(no,digits));
+    return parts.filter(Boolean).join(sep)+extension;
+  }
+  function updateRenameTemplate(){
+    const sep=$('renameSeparator').value;
+    const parts=[sanitizeRenamePart($('renameType').value)||'类别','[自动分数]'];
+    const tag=normalizeRenameTag($('renameTag').value);
+    parts.push(tag||'[TAG可选]','横屏/竖屏','编号');
+    $('renameTemplatePreview').textContent=parts.join(sep);
+  }
+
+  function getRenameSettings(){
+    const out={};
+    for(const id of ['renameType','renameTag','renameStartNo','renameDigits','renameSortMode','renameSeparator','renameStatusFilter']) out[id]=$(id).value;
+    return out;
+  }
+  function saveRenameSettings(){ try{localStorage.setItem(RENAME_SETTINGS_KEY,JSON.stringify(getRenameSettings()));}catch(_){} }
+  function loadRenameSettings(){
+    try{
+      const raw=localStorage.getItem(RENAME_SETTINGS_KEY); if(!raw) return;
+      const data=JSON.parse(raw);
+      for(const [id,value] of Object.entries(data)) if($(id)&&value!==undefined&&value!==null) $(id).value=String(value);
+    }catch(_){}
+  }
+
+  function renameTimestamp(){
+    const d=new Date(),p=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  }
+  function renameCsvEscape(v){ const x=String(v??''); return /[",\n\r]/.test(x)?`"${x.replace(/"/g,'""')}"`:x; }
+  function showRenameNotice(lines){
+    const el=$('renameNotice');
+    if(!lines||!lines.length){el.style.display='none';el.textContent='';return;}
+    el.style.display='block';el.textContent=lines.join('\n');
+  }
+  function setRenameProgress(current,total,text=''){
+    const p=$('renameProgress');
+    if(total<=0){p.style.display='none';return;}
+    p.style.display='block';
+    const percent=Math.max(0,Math.min(100,Math.round(current/total*100)));
+    $('renameProgressFill').style.width=percent+'%';
+    $('renameProgressText').textContent=text||`${current}/${total}（${percent}%）`;
+  }
+  function hideRenameProgress(){
+    setTimeout(()=>{ if(!$('renameProgress')) return; $('renameProgress').style.display='none';$('renameProgressFill').style.width='0%';$('renameProgressText').textContent='';},300);
+  }
+  function setRenameUiBusy(value,text=''){
+    renameBusy=!!value;
+    $('renameCard').classList.toggle('rename-busy',!!value);
+    if(text) $('renameFolderStatus').textContent=text;
+    $('renameCancelBtn').disabled=!!value;
+  }
+
+  function isRenameCandidateName(name){
+    if(name.startsWith(RENAME_TEMP_PREFIX)) return false;
+    return IMAGE_EXT.has(extOf(name));
+  }
+  function sortRenameGroupItems(source){
+    const arr=[...source],mode=$('renameSortMode').value;
+    if(mode==='orientation'){
+      arr.sort((a,b)=>{const oa=a.orientation==='横屏'?0:1,ob=b.orientation==='横屏'?0:1;if(oa!==ob)return oa-ob;return naturalRenameCompare(a.originalName,b.originalName);});
+    }else if(mode==='name') arr.sort((a,b)=>naturalRenameCompare(a.originalName,b.originalName));
+    else arr.sort((a,b)=>a.folderOrder-b.folderOrder);
+    return arr;
+  }
+  function sortedRenameItems(source){
+    const grouped=new Map();
+    for(const item of source){if(!grouped.has(item.folderName))grouped.set(item.folderName,[]);grouped.get(item.folderName).push(item);}
+    const out=[];
+    for(const group of renameGroups){out.push(...sortRenameGroupItems(grouped.get(group.folderName)||[]));}
+    return out;
+  }
+
+  async function rebuildRenameNamesOnly(){
+    updateRenameTemplate();
+    if(!renameItems.length){renderRenamePlan();return;}
+    const grouped=new Map();
+    for(const item of renameItems){if(!grouped.has(item.folderName))grouped.set(item.folderName,[]);grouped.get(item.folderName).push(item);}
+    const rebuilt=[];const numberingErrors=[];
+    const start=Math.max(0,parseInt($('renameStartNo').value||'1',10));
+    for(const group of renameGroups){
+      const ordered=sortRenameGroupItems(grouped.get(group.folderName)||[]);
+      const active=ordered.filter(x=>!x.excluded);
+      const digits=resolvedRenameDigits(active.length);
+      const err=renameDigitCapacityError(active.length,`${group.folderName}：`);if(err)numberingErrors.push(err);
+      const targetMap=new Map();let seq=0;
+      for(const item of ordered){
+        item.warning='';
+        if(item.excluded){item.number=null;item.newName='';item.status='excluded';continue;}
+        item.number=start+seq++;
+        item.newName=item.orientation==='未知'?'':composeRenameName(item.score,item.orientation,item.number,baseExt(item.originalName).ext,digits);
+        if(!item.newName){item.warning='无法识别尺寸';item.status='conflict';continue;}
+        item.status=item.originalName===item.newName?'unchanged':'pending';
+        if(new TextEncoder().encode(item.newName).length>255){item.warning='文件名超过255字节';item.status='conflict';}
+        const key=item.newName.toLocaleLowerCase();
+        if(targetMap.has(key)){
+          item.warning='目标名重复';item.status='conflict';
+          const other=targetMap.get(key);other.warning='目标名重复';other.status='conflict';
+        }else targetMap.set(key,item);
+      }
+      const movableSources=new Set(active.map(x=>x.originalName.toLocaleLowerCase()));
+      const existing=renameExistingNamesMap.get(group.folderName)||new Map();
+      for(const item of active){
+        if(item.status==='unchanged'||!item.newName)continue;
+        const key=item.newName.toLocaleLowerCase();
+        if(existing.has(key)&&!movableSources.has(key)){
+          item.warning=`目标名已被占用：${existing.get(key)}`;item.status='conflict';
+        }
+      }
+      rebuilt.push(...ordered);
+    }
+    renameNumberingError=numberingErrors.join('\n');
+    renameItems=rebuilt;
+    renderRenamePlan();
+  }
+
+  function toggleRenameExclude(item,participates){
+    item.excluded=!participates;
+    rebuildRenameNamesOnly().catch(e=>showRenameNotice([e?.message||String(e)]));
+  }
+  function filteredRenameItems(){
+    const f=$('renameStatusFilter').value;
+    if(f==='all') return renameItems;
+    return renameItems.filter(x=>x.status===f);
+  }
+  function renderRenamePlan(){
+    const tbody=$('renameTbody'); tbody.innerHTML='';
+    const filter=$('renameStatusFilter').value;
+    const visibleErrors=filter==='readerror'?renameReadErrors:null;
+    const visible=filter==='readerror'?[]:filteredRenameItems();
+    if(visibleErrors){
+      if(!visibleErrors.length) tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#888;padding:30px">没有尺寸读取失败的图片</td></tr>';
+      else visibleErrors.slice(0,RENAME_PREVIEW_LIMIT).forEach((er,i)=>{
+        const tr=document.createElement('tr');tr.innerHTML='<td>—</td><td class="old-name"></td><td></td><td class="old-name"></td><td>—</td><td>—</td><td>—</td><td><span class="rename-badge warn">尺寸读取失败</span></td>';
+        tr.children[1].textContent=er.folderName||'—';tr.children[2].textContent=String(i+1);tr.children[3].textContent=er.name;tr.title=er.error;tbody.appendChild(tr);
+      });
+    }else if(!renameDirHandle){
+      tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#888;padding:30px">请先在主界面选择图片文件夹</td></tr>';
+    }else if(!renameGroups.length){
+      tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#888;padding:30px">当前主目录未发现评分子文件夹</td></tr>';
+    }else if(!renameItems.length){
+      tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#888;padding:30px">评分文件夹中没有可预览图片</td></tr>';
+    }else if(!visible.length){
+      tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#888;padding:30px">当前筛选条件下没有图片</td></tr>';
+    }else{
+      const frag=document.createDocumentFragment();
+      visible.slice(0,RENAME_PREVIEW_LIMIT).forEach(it=>{
+        const tr=document.createElement('tr');
+        const tdCheck=document.createElement('td'),check=document.createElement('input');
+        check.type='checkbox';check.className='rename-check renameCheck';check.checked=!it.excluded;check.title='是否参与编号和重命名';check.addEventListener('change',()=>toggleRenameExclude(it,check.checked));tdCheck.appendChild(check);tr.appendChild(tdCheck);
+        const tdFolder=document.createElement('td');tdFolder.className='old-name';tdFolder.textContent=it.folderName;tr.appendChild(tdFolder);
+        const tdNo=document.createElement('td');tdNo.textContent=it.number??'—';tr.appendChild(tdNo);
+        const tdOld=document.createElement('td');tdOld.className='old-name';tdOld.textContent=it.originalName;tr.appendChild(tdOld);
+        const tdSize=document.createElement('td');tdSize.textContent=it.width&&it.height?`${it.width}×${it.height}`:'未知';tr.appendChild(tdSize);
+        const tdOri=document.createElement('td');const oc=it.orientation==='横屏'?'landscape':it.orientation==='竖屏'?'portrait':'warn';tdOri.innerHTML=`<span class="rename-badge ${oc}">${it.orientation}</span>`;tr.appendChild(tdOri);
+        const tdNew=document.createElement('td');tdNew.className='new-name';tdNew.textContent=it.newName||'—';tr.appendChild(tdNew);
+        const tdState=document.createElement('td');
+        tdState.innerHTML=it.status==='pending'?'<span class="rename-badge ok">待重命名</span>':it.status==='unchanged'?'<span class="rename-badge rename-muted">无需修改</span>':it.status==='excluded'?'<span class="rename-badge rename-excluded">已排除</span>':'<span class="rename-badge warn">需检查</span>';
+        tr.appendChild(tdState);frag.appendChild(tr);
+      });
+      tbody.appendChild(frag);
+    }
+
+    const landscape=renameItems.filter(x=>x.orientation==='横屏').length;
+    const portrait=renameItems.filter(x=>x.orientation==='竖屏').length;
+    const conflicts=renameItems.filter(x=>x.status==='conflict').length;
+    const unchanged=renameItems.filter(x=>x.status==='unchanged').length;
+    const excluded=renameItems.filter(x=>x.status==='excluded').length;
+    const pending=renameItems.filter(x=>x.status==='pending').length;
+    $('renameCountAll').textContent=renameItems.length;
+    $('renameCountLandscape').textContent=landscape;
+    $('renameCountPortrait').textContent=portrait;
+    $('renameCountErrors').textContent=renameReadErrors.length;
+    $('renameCountConflicts').textContent=conflicts;
+    $('renameCountUnchanged').textContent=unchanged;
+    $('renameCountExcluded').textContent=excluded;
+    $('renameCountPending').textContent=pending;
+    const visibleCount=visibleErrors?visibleErrors.length:visible.length;
+    $('renamePreviewLimit').textContent=visibleCount>RENAME_PREVIEW_LIMIT?`当前筛选共 ${visibleCount} 条，为保证流畅只显示前 ${RENAME_PREVIEW_LIMIT} 条；统计和实际执行仍覆盖全部。`:'';
+
+    const validRequired=!!sanitizeRenamePart($('renameType').value)&&renameGroups.length>0;
+    const blocked=!!renameCurrentTransaction||!!renameScanSafetyError||!!renameNumberingError;
+    $('renameExecuteBtn').disabled=!renameDirHandle||!pending||renameReadErrors.length>0||conflicts>0||!validRequired||renameBusy||renameScanBusy||blocked;
+    $('renameExportPreviewBtn').disabled=!renameDirHandle||!renameItems.length||!validRequired||renameBusy||renameScanBusy||blocked;
+    $('renameScanBtn').disabled=!renameDirHandle||renameBusy||renameScanBusy;
+    $('renameFolderPickBtn').disabled=!dirHandle||renameBusy||renameScanBusy||fileOperationBusy;
+
+    const lines=[];
+    if(renameDirHandle&&!renameGroups.length)lines.push('未发现评分文件夹：当前主目录下需要存在 3分 / 3.5分 / 4分 / 重复，或对应的 -N张 子文件夹。');
+    if(renameScanSafetyError)lines.push('安全检查：'+renameScanSafetyError);
+    if(renameNumberingError){if(lines.length)lines.push('');lines.push(renameNumberingError);}
+    if(renameReadErrors.length){lines.push(`尺寸读取失败 ${renameReadErrors.length} 张（存在失败时禁止执行）：`);renameReadErrors.slice(0,30).forEach(x=>lines.push(`• ${x.folderName}/${x.name} — ${x.error}`));if(renameReadErrors.length>30)lines.push('…');}
+    const bad=renameItems.filter(x=>x.warning);
+    if(bad.length){if(lines.length)lines.push('');lines.push(`命名冲突/异常 ${bad.length} 项：`);bad.slice(0,30).forEach(x=>lines.push(`• ${x.folderName}/${x.originalName} → ${x.newName} — ${x.warning}`));if(bad.length>30)lines.push('…');}
+    showRenameNotice(lines);
+  }
+
+  async function writeRenameTextFile(name,text){const h=await renameDirHandle.getFileHandle(name,{create:true});const w=await h.createWritable();await w.write(text);await w.close();}
+  async function readRenameTextFile(name){const h=await renameDirHandle.getFileHandle(name);const f=await h.getFile();return await f.text();}
+  async function removeRenameIfExists(name){try{await renameDirHandle.removeEntry(name);}catch(e){if(e.name!=='NotFoundError')throw e;}}
+  async function getRenameFolderHandle(folderName){
+    const group=renameGroups.find(g=>g.folderName===folderName);if(group?.handle)return group.handle;
+    if(!renameDirHandle)throw new Error('没有主图片文件夹');
+    return renameDirHandle.getDirectoryHandle(folderName);
+  }
+  async function getRenameRecordDirectory(rec){return getRenameFolderHandle(rec.folder_name);}
+  async function renameFileExists(folderHandle,name){try{await folderHandle.getFileHandle(name);return true;}catch(e){if(e.name==='NotFoundError')return false;throw e;}}
+  async function copyRenameFileTo(folderHandle,name,file){const target=await folderHandle.getFileHandle(name,{create:true});const writable=await target.createWritable();await writable.write(file);await writable.close();}
+  function makeRenameTempName(index,ext){return `${RENAME_TEMP_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2)}_${index}${ext}`;}
+  async function renameMoveOrCopy(folderHandle,fromName,toName){
+    const source=await folderHandle.getFileHandle(fromName);
+    if(typeof source.move==='function'&&renameNativeMoveSupport!==false){
+      try{await source.move(toName);renameNativeMoveSupport=true;$('renameOperationMode').textContent='文件操作：原生 move 快速模式';return 'move';}
+      catch(err){
+        const fromExists=await renameFileExists(folderHandle,fromName),toExists=await renameFileExists(folderHandle,toName);
+        if(!fromExists&&toExists){renameNativeMoveSupport=true;$('renameOperationMode').textContent='文件操作：原生 move 快速模式';return 'move';}
+        if(!fromExists||toExists)throw err;
+        renameNativeMoveSupport=false;$('renameOperationMode').textContent='文件操作：安全复制兼容模式';
+      }
+    }
+    const fallbackSource=await folderHandle.getFileHandle(fromName),file=await fallbackSource.getFile();
+    await copyRenameFileTo(folderHandle,toName,file);await folderHandle.removeEntry(fromName);
+    if(renameNativeMoveSupport===null)renameNativeMoveSupport=false;
+    $('renameOperationMode').textContent='文件操作：安全复制兼容模式';return 'copy';
+  }
+
+  async function loadRenameManifest(){try{return JSON.parse(await readRenameTextFile(RENAME_MANIFEST_NAME));}catch(e){return null;}}
+  async function loadRenameTransaction(){
+    let raw;
+    try{raw=await readRenameTextFile(RENAME_TX_NAME);}catch(e){if(e?.name==='NotFoundError')return null;throw new Error('检测到异常事务：无法读取事务记录文件。'+(e?.message||e));}
+    let tx;try{tx=JSON.parse(raw);}catch(e){throw new Error('检测到异常事务：事务记录 JSON 已损坏。请不要开始新的重命名，先备份当前文件夹并检查临时文件。');}
+    if(!tx||!Array.isArray(tx.records)||!['rename','undo','recovery'].includes(tx.operation))throw new Error('检测到异常事务：事务记录结构无效。请不要开始新的重命名。');
+    for(const r of tx.records){if(!r||!r.folder_name||!r.from_name||!r.to_name||!r.temp_name)throw new Error('检测到异常事务：事务记录缺少评分文件夹或文件名字段。');if(!r.state)r.state='from';}
+    try{tx._progress=JSON.parse(await readRenameTextFile(RENAME_TX_PROGRESS_NAME));}catch(e){if(e?.name!=='NotFoundError')tx._progress=null;}
+    return tx;
+  }
+  async function saveRenameTransactionDefinition(tx){
+    tx.updated_at=new Date().toISOString();const clean={...tx};delete clean._progress;
+    await writeRenameTextFile(RENAME_TX_NAME,JSON.stringify(clean,null,2));renameCurrentTransaction=tx;showRenameTransactionPanel(tx);
+  }
+  async function writeRenameTransactionProgress(tx,stage,index,total){
+    const p={operation:tx.operation,stage,index,total,completed:Math.min(total,stage===0?0:stage===1?index:tx.records.length+index),updated_at:new Date().toISOString()};
+    tx._progress=p;await writeRenameTextFile(RENAME_TX_PROGRESS_NAME,JSON.stringify(p));renameCurrentTransaction=tx;showRenameTransactionPanel(tx);
+  }
+  function buildRenameTransaction(operation,pairs,extra={}){
+    return {version:3,operation,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),...extra,records:pairs.map((p,i)=>({...p,temp_name:makeRenameTempName(i,baseExt(p.from_name).ext),state:'from'}))};
+  }
+  function showRenameTransactionPanel(tx){
+    const panel=$('renameTransactionPanel');
+    if(!tx){panel.style.display='none';$('renameTransactionText').textContent='';return;}
+    panel.style.display='block';
+    const label=tx.operation==='rename'?'批量重命名':tx.operation==='undo'?'撤销重命名':'恢复操作';
+    const total=(tx.records?.length||0)*2,done=tx._progress?.completed??(tx.records||[]).reduce((n,r)=>n+(r.state==='to'?2:r.state==='temp'?1:0),0);
+    const folderCount=new Set((tx.records||[]).map(r=>r.folder_name)).size;
+    $('renameTransactionText').textContent=`上一次“${label}”没有正常结束，涉及 ${folderCount} 个评分文件夹、${tx.records?.length||0} 项，处理进度约 ${done}/${Math.max(1,total)}。可以继续执行，也可以整体恢复到操作前状态。`;
+    $('renameRecoverInterruptedBtn').style.display=tx.operation==='recovery'?'none':'inline-block';
+    $('renameContinueInterruptedBtn').textContent=tx.operation==='recovery'?'继续恢复':'继续上次任务';
+  }
+  async function updateRenameUndoAvailability(){
+    if(!renameDirHandle||renameCurrentTransaction){$('renameUndoBtn').disabled=true;return;}
+    const m=await loadRenameManifest();$('renameUndoBtn').disabled=!(m&&Array.isArray(m.records)&&m.records.length)||renameBusy;
+  }
+  async function renameDirectoryExactNames(folderHandle){const set=new Set();for await(const [name,handle] of folderHandle.entries())if(handle.kind==='file')set.add(name);return set;}
+  async function renameDirectoryNameMap(folderHandle){const map=new Map();for await(const [name,handle] of folderHandle.entries())if(handle.kind==='file')map.set(name.toLocaleLowerCase(),name);return map;}
+  async function preflightRenameTransaction(tx){
+    const grouped=new Map();for(const rec of tx.records){if(!grouped.has(rec.folder_name))grouped.set(rec.folder_name,[]);grouped.get(rec.folder_name).push(rec);}
+    for(const [folderName,records] of grouped){
+      const folderHandle=await getRenameFolderHandle(folderName),names=await renameDirectoryNameMap(folderHandle),sources=new Set(records.map(r=>r.from_name.toLocaleLowerCase())),seenTo=new Set();
+      for(const rec of records){
+        const fk=rec.from_name.toLocaleLowerCase(),tk=rec.to_name.toLocaleLowerCase();
+        if(!names.has(fk))throw new Error(`找不到源文件：${folderName}/${rec.from_name}`);
+        if(seenTo.has(tk))throw new Error(`目标文件名重复：${folderName}/${rec.to_name}`);seenTo.add(tk);
+        if(names.has(tk)&&!sources.has(tk))throw new Error(`目标文件名已被占用：${folderName}/${names.get(tk)}`);
+        if(await renameFileExists(folderHandle,rec.temp_name))throw new Error(`临时文件名已存在：${folderName}/${rec.temp_name}`);
+      }
+    }
+    return true;
+  }
+  async function reconcileRenameTransaction(tx){
+    const nameSets=new Map();
+    for(const rec of tx.records){
+      const folderHandle=await getRenameRecordDirectory(rec);let names=nameSets.get(rec.folder_name);if(!names){names=await renameDirectoryExactNames(folderHandle);nameSets.set(rec.folder_name,names);}
+      let f=names.has(rec.from_name),t=names.has(rec.temp_name),o=names.has(rec.to_name);
+      if(f&&!t&&!o){rec.state='from';continue;}
+      if(!f&&t&&!o){rec.state='temp';continue;}
+      if(!f&&!t&&o){rec.state='to';continue;}
+      if(f&&t&&!o){try{await folderHandle.removeEntry(rec.temp_name);}catch(e){if(e.name!=='NotFoundError')throw e;}names.delete(rec.temp_name);rec.state='from';continue;}
+      if(!f&&t&&o){try{await folderHandle.removeEntry(rec.to_name);}catch(e){if(e.name!=='NotFoundError')throw e;}names.delete(rec.to_name);rec.state='temp';continue;}
+      throw new Error(`无法自动判断中断状态：${rec.folder_name}/${rec.from_name} / ${rec.temp_name} / ${rec.to_name}。为避免误覆盖，已停止自动恢复。`);
+    }
+    await saveRenameTransactionDefinition(tx);return tx;
+  }
+  async function saveRenameResult(tx){
+    const manifest={version:3,created_at:new Date().toISOString(),records:tx.records.map(r=>({folder_name:r.folder_name,score:r.score||'',original_name:r.from_name,new_name:r.to_name,width:r.width,height:r.height,orientation:r.orientation}))};
+    await writeRenameTextFile(RENAME_MANIFEST_NAME,JSON.stringify(manifest,null,2));
+    const csvName=`${RENAME_CSV_PREFIX}${renameTimestamp()}.csv`,lines=['folder_name,score,original_name,new_name,width,height,orientation,status'];
+    for(const r of tx.records)lines.push([r.folder_name,r.score||'',r.from_name,r.to_name,r.width||'',r.height||'',r.orientation||'','success'].map(renameCsvEscape).join(','));
+    await writeRenameTextFile(csvName,'\uFEFF'+lines.join('\n'));return csvName;
+  }
+  async function finalizeRenameTransaction(tx){
+    let message='';
+    if(tx.operation==='rename'){const csvName=await saveRenameResult(tx);message=`重命名完成：${tx.records.length} 张，覆盖 ${new Set(tx.records.map(r=>r.folder_name)).size} 个评分文件夹。映射表：${csvName}`;}
+    else if(tx.operation==='undo'){await removeRenameIfExists(RENAME_MANIFEST_NAME);message=`撤销完成：已恢复 ${tx.records.length} 张图片。`;}
+    else message=`恢复完成：${tx.records.length} 项已回到操作前状态。`;
+    await removeRenameIfExists(RENAME_TX_NAME);await removeRenameIfExists(RENAME_TX_PROGRESS_NAME);renameCurrentTransaction=null;showRenameTransactionPanel(null);return message;
+  }
+  async function runRenameTransaction(tx){
+    renameCurrentTransaction=tx;const total=Math.max(1,tx.records.length*2);
+    for(let i=0;i<tx.records.length;i++){
+      const rec=tx.records[i];if(rec.state!=='from')continue;const folderHandle=await getRenameRecordDirectory(rec);
+      await renameMoveOrCopy(folderHandle,rec.from_name,rec.temp_name);rec.state='temp';await writeRenameTransactionProgress(tx,1,i+1,total);setRenameProgress(i+1,total,`阶段 1/2：${i+1}/${tx.records.length} · ${rec.folder_name}`);
+      if((i+1)%RENAME_YIELD_EVERY===0)await yieldToBrowser();
+    }
+    for(let i=0;i<tx.records.length;i++){
+      const rec=tx.records[i];if(rec.state==='to')continue;if(rec.state!=='temp')throw new Error(`事务状态异常：${rec.folder_name}/${rec.from_name}`);const folderHandle=await getRenameRecordDirectory(rec);
+      await renameMoveOrCopy(folderHandle,rec.temp_name,rec.to_name);rec.state='to';await writeRenameTransactionProgress(tx,2,i+1,total);setRenameProgress(tx.records.length+i+1,total,`阶段 2/2：${i+1}/${tx.records.length} · ${rec.folder_name}`);
+      if((i+1)%RENAME_YIELD_EVERY===0)await yieldToBrowser();
+    }
+    return finalizeRenameTransaction(tx);
+  }
+  async function startRenameTransaction(tx){await preflightRenameTransaction(tx);await saveRenameTransactionDefinition(tx);await writeRenameTransactionProgress(tx,0,0,Math.max(1,tx.records.length*2));return runRenameTransaction(tx);}
+
+  async function continueInterruptedRename(){
+    if(!renameDirHandle||renameBusy)return;const tx=await loadRenameTransaction();if(!tx)return;
+    setRenameUiBusy(true,'正在继续未完成任务…');setFileOperationBusy(true);
+    try{await reconcileRenameTransaction(tx);const msg=await runRenameTransaction(tx);alert(msg);await scanRenameScoreFolders(true);}
+    catch(err){console.error(err);showRenameNotice(['继续任务失败：'+(err?.message||err)]);alert('继续任务失败：'+(err?.message||err));}
+    finally{setRenameUiBusy(false);setFileOperationBusy(false);hideRenameProgress();renderRenamePlan();}
+  }
+  async function recoverInterruptedRename(){
+    if(!renameDirHandle||renameBusy)return;const tx=await loadRenameTransaction();if(!tx)return;
+    if(tx.operation==='recovery')return continueInterruptedRename();
+    if(!confirm('将把本次涉及的所有评分文件夹整体恢复到操作开始前的文件名状态。\n\n确认继续吗？'))return;
+    setRenameUiBusy(true,'正在准备恢复…');setFileOperationBusy(true);
+    try{
+      await reconcileRenameTransaction(tx);const pairs=[];
+      for(const rec of tx.records){if(rec.state==='from')continue;const current=rec.state==='temp'?rec.temp_name:rec.to_name;pairs.push({folder_name:rec.folder_name,score:rec.score||'',from_name:current,to_name:rec.from_name});}
+      if(!pairs.length){await removeRenameIfExists(RENAME_TX_NAME);await removeRenameIfExists(RENAME_TX_PROGRESS_NAME);renameCurrentTransaction=null;showRenameTransactionPanel(null);alert('所有文件已经处于操作前状态。');await scanRenameScoreFolders(true);return;}
+      const recovery=buildRenameTransaction('recovery',pairs,{source_operation:tx.operation});const msg=await startRenameTransaction(recovery);alert(msg);await scanRenameScoreFolders(true);
+    }catch(err){console.error(err);showRenameNotice(['恢复失败：'+(err?.message||err)]);alert('恢复失败：'+(err?.message||err));}
+    finally{setRenameUiBusy(false);setFileOperationBusy(false);hideRenameProgress();renderRenamePlan();}
+  }
+
+  async function scanRenameScoreFolders(force=false){
+    if(!renameDirHandle||renameScanBusy||(renameBusy&&!force))return;
+    renameScanBusy=true;
+    $('renameCard').classList.add('rename-busy');
+    $('renameFolderStatus').textContent='正在扫描当前主目录中的评分文件夹…';
+    $('renameTbody').innerHTML='<tr><td colspan="8" style="text-align:center;color:#888;padding:30px">正在扫描评分文件夹，请稍候…</td></tr>';
+    renameReadErrors=[];renameItems=[];renameGroups=[];renameExistingNamesMap=new Map();renameNumberingError='';renameScanSafetyError='';renameNativeMoveSupport=null;renameDetectedScore='';renameDetectedDeclaredCount=null;
+    const started=performance.now(),allCandidates=[],tempFiles=[],legacyTxFolders=[],mismatchLines=[];
+    try{
+      const found=[];
+      for await(const [name,handle] of renameDirHandle.entries()){
+        if(handle.kind!=='directory')continue;const parsed=parseScoreFolderName(name);if(parsed)found.push({folderName:name,handle,score:parsed.score,declaredCount:parsed.declaredCount});
+      }
+      found.sort((a,b)=>renameScoreRank(a.score)-renameScoreRank(b.score)||naturalRenameCompare(a.folderName,b.folderName));
+      let globalOrder=0;
+      for(let gi=0;gi<found.length;gi++){
+        const group=found[gi],existing=new Map(),candidates=[];let folderOrder=0,hasLegacyTx=false;
+        for await(const [name,handle] of group.handle.entries()){
+          if(handle.kind!=='file')continue;existing.set(name.toLocaleLowerCase(),name);
+          if(name.startsWith(RENAME_TEMP_PREFIX))tempFiles.push(`${group.folderName}/${name}`);
+          if(name===RENAME_TX_NAME)hasLegacyTx=true;
+          if(isRenameCandidateName(name))candidates.push({name,handle,folderName:group.folderName,folderHandle:group.handle,score:group.score,groupOrder:gi,folderOrder:folderOrder++,globalOrder:globalOrder++});
+        }
+        if(hasLegacyTx)legacyTxFolders.push(group.folderName);
+        group.actualCount=candidates.length;group.groupOrder=gi;renameGroups.push(group);renameExistingNamesMap.set(group.folderName,existing);allCandidates.push(...candidates);
+        if(group.declaredCount!=null&&group.declaredCount!==candidates.length)mismatchLines.push(`${group.folderName}：文件夹名声明 ${group.declaredCount} 张，实际 ${candidates.length} 张`);
+      }
+      detectRenameScoreFromFolder();
+      renameCurrentTransaction=await loadRenameTransaction();
+      if(renameCurrentTransaction){showRenameTransactionPanel(renameCurrentTransaction);$('renameFolderStatus').textContent='检测到未完成的整批重命名任务，请先继续或恢复';await updateRenameUndoAvailability();renderRenamePlan();return;}
+      showRenameTransactionPanel(null);
+      const safety=[];
+      if(legacyTxFolders.length)safety.push(`检测到旧版单文件夹未完成事务：${legacyTxFolders.join('、')}。为避免覆盖旧事务，已禁止新的整批重命名。`);
+      if(tempFiles.length)safety.push(`检测到 ${tempFiles.length} 个临时重命名文件但没有当前整批事务记录。请先备份并处理这些临时文件。`);
+      if(mismatchLines.length)safety.push('评分文件夹数量不一致：\n'+mismatchLines.join('\n')+'\n请先确认评分导出完整；全部数量一致前禁止重命名。');
+      renameScanSafetyError=safety.join('\n\n');
+      const concurrency=Math.min(10,Math.max(1,allCandidates.length)),results=[];let next=0,done=0;
+      async function worker(){
+        while(true){
+          const idx=next++;if(idx>=allCandidates.length)return;const c=allCandidates[idx];
+          try{
+            const file=await c.handle.getFile(),size=await getImageSizeFast(file,c.name);
+            if(!size.width||!size.height)throw new Error('无法读取图片尺寸或浏览器不支持该格式');
+            results.push({originalName:c.name,handle:c.handle,folderName:c.folderName,folderHandle:c.folderHandle,score:c.score,groupOrder:c.groupOrder,folderOrder:c.folderOrder,globalOrder:c.globalOrder,width:size.width,height:size.height,orientation:renameOrientation(size.width,size.height),number:null,newName:'',warning:'',status:'pending',excluded:false});
+          }catch(e){renameReadErrors.push({folderName:c.folderName,name:c.name,error:e?.message||String(e)});}
+          done++;const elapsed=Math.max(.001,(performance.now()-started)/1000),rate=Math.round(done/elapsed);setRenameProgress(done,allCandidates.length,`正在读取尺寸：${done}/${allCandidates.length}｜约 ${rate} 张/秒`);
+        }
+      }
+      await Promise.all(Array.from({length:concurrency},()=>worker()));
+      renameItems=results.sort((a,b)=>a.groupOrder-b.groupOrder||a.folderOrder-b.folderOrder);renameReadErrors.sort((a,b)=>naturalRenameCompare(`${a.folderName}/${a.name}`,`${b.folderName}/${b.name}`));
+      await rebuildRenameNamesOnly();
+      const elapsed=Math.max(.001,(performance.now()-started)/1000),rate=Math.round(allCandidates.length/elapsed);
+      const groupSummary=renameGroups.map(g=>`${g.folderName} ${g.actualCount}张`).join(' · ');
+      $('renameFolderStatus').textContent=renameGroups.length?`已自动扫描 ${renameGroups.length} 个评分文件夹 · ${groupSummary} · 共 ${renameItems.length} 张 · ${elapsed.toFixed(1)} 秒 · 约 ${rate} 张/秒`:'当前主目录未发现评分文件夹';
+      await updateRenameUndoAvailability();
+    }catch(err){console.error(err);renameScanSafetyError=err?.message||String(err);showRenameNotice(['安全扫描已停止：'+renameScanSafetyError]);$('renameFolderStatus').textContent='扫描已阻止，请检查提示';}
+    finally{renameScanBusy=false;$('renameCard').classList.remove('rename-busy');hideRenameProgress();detectRenameScoreFromFolder();renderRenamePlan();}
+  }
+  async function scanRenameDirectory(force=false){return scanRenameScoreFolders(force);}
+
+  async function pickRenameDirectory(){
+    if(renameBusy||renameScanBusy||fileOperationBusy)return;
+    if(!dirHandle){alert('请先在主界面点击“选择图片文件夹”，选择包含原图和评分导出子文件夹的主目录。');return;}
+    renameDirHandle=dirHandle;renameItems=[];renameGroups=[];renameReadErrors=[];renameExistingNamesMap=new Map();renameCurrentTransaction=null;renameScanSafetyError='';
+    $('renameFolderStatus').textContent=`当前主目录：${renameDirHandle.name}`;renderRenamePlan();await scanRenameScoreFolders(true);
+  }
+  async function openRenameModal(){
+    if(fileOperationBusy)return;$('renameModal').classList.add('show');updateRenameTemplate();
+    if(!dirHandle){renameDirHandle=null;renameGroups=[];detectRenameScoreFromFolder();$('renameFolderStatus').textContent='请先在主界面选择图片文件夹';renderRenamePlan();return;}
+    renameDirHandle=dirHandle;renderRenamePlan();await scanRenameScoreFolders(true);
+  }
+
+  async function exportRenamePreview(){
+    if(!renameDirHandle||!renameItems.length||renameBusy||renameScanBusy)return;
+    if(!sanitizeRenamePart($('renameType').value)){alert('请先填写类别。');return;}
+    await rebuildRenameNamesOnly();
+    if(renameNumberingError){alert(renameNumberingError);return;}
+    if(renameScanSafetyError){alert('安全检查未通过：'+renameScanSafetyError);return;}
+    const name=`${RENAME_PREVIEW_PREFIX}${renameTimestamp()}.csv`,lines=['participate,folder_name,score,original_name,new_name,width,height,orientation,status,warning'];
+    for(const it of renameItems)lines.push([it.excluded?'no':'yes',it.folderName,it.score,it.originalName,it.newName,it.width,it.height,it.orientation,it.status,it.warning].map(renameCsvEscape).join(','));
+    await writeRenameTextFile(name,'\uFEFF'+lines.join('\n'));alert(`整批预览 CSV 已保存到主图片文件夹：\n${name}`);
+  }
+
+  async function executeRename(){
+    if(!renameItems.length||!renameDirHandle||renameBusy||renameScanBusy||fileOperationBusy)return;
+    if(!sanitizeRenamePart($('renameType').value)){alert('请填写类别。');return;}
+    if(!renameGroups.length){alert('当前主目录没有识别到评分文件夹。');return;}
+    if(!await verifyDirectoryPermission(renameDirHandle)){alert('没有获得主图片文件夹的写入权限。');return;}
+    await rebuildRenameNamesOnly();
+    if(renameNumberingError){alert(renameNumberingError);return;}
+    if(renameScanSafetyError){alert('安全检查未通过：'+renameScanSafetyError);return;}
+    const pending=renameItems.filter(x=>x.status==='pending');
+    if(renameReadErrors.length||renameItems.some(x=>x.status==='conflict')){alert('存在尺寸读取失败或命名冲突，请处理后再执行。');return;}
+    if(!pending.length){alert('当前没有需要重命名的图片。');return;}
+    const groups=[...new Set(pending.map(x=>x.folderName))];
+    if(!confirm(`即将一次重命名 ${groups.length} 个评分文件夹中的 ${pending.length} 张图片。\n\n评分文件夹：${groups.join('、')}\n每个评分文件夹都会从起始编号独立编号。\n命名预览：${$('renameTemplatePreview').textContent}\n\n整批操作使用同一个可恢复事务；中断后可以继续或整体恢复。\n\n确认继续吗？`))return;
+    setRenameUiBusy(true,'正在整批重命名…');setFileOperationBusy(true);
+    try{
+      const pairs=pending.map(it=>({folder_name:it.folderName,score:it.score,from_name:it.originalName,to_name:it.newName,width:it.width,height:it.height,orientation:it.orientation}));
+      const tx=buildRenameTransaction('rename',pairs,{folders:renameGroups.map(g=>({folder_name:g.folderName,score:g.score,count:g.actualCount}))});
+      const msg=await startRenameTransaction(tx);toast(`批量重命名完成：${pending.length} 张`);alert(msg);await scanRenameScoreFolders(true);
+    }catch(err){
+      console.error(err);renameCurrentTransaction=await loadRenameTransaction();showRenameTransactionPanel(renameCurrentTransaction);
+      if(renameCurrentTransaction){$('renameFolderStatus').textContent='整批执行中断，可继续或整体恢复';showRenameNotice(['重命名过程中发生错误：'+(err?.message||err),'整批事务记录仍保留，可使用“继续上次任务”或“恢复到操作前”。']);alert('整批重命名过程中发生错误。事务记录已保留，请选择继续或整体恢复。');}
+      else{$('renameFolderStatus').textContent='执行前检查未通过';showRenameNotice(['无法开始重命名：'+(err?.message||err)]);alert('无法开始重命名：'+(err?.message||err));}
+    }finally{setRenameUiBusy(false);setFileOperationBusy(false);hideRenameProgress();await updateRenameUndoAvailability();renderRenamePlan();}
+  }
+
+  async function undoLastRename(){
+    if(!renameDirHandle||renameBusy||fileOperationBusy)return;
+    if(!await verifyDirectoryPermission(renameDirHandle)){alert('没有获得主图片文件夹的写入权限。');return;}
+    const manifest=await loadRenameManifest();
+    if(!manifest||!Array.isArray(manifest.records)||!manifest.records.length){alert('当前主目录没有可撤销的整批重命名记录。');await updateRenameUndoAvailability();return;}
+    if(!confirm(`将整体撤销最近一次批量重命名，共 ${manifest.records.length} 张图片、${new Set(manifest.records.map(r=>r.folder_name)).size} 个评分文件夹。\n\n撤销过程同样使用可恢复事务。\n\n确认继续吗？`))return;
+    setRenameUiBusy(true,'正在整体撤销…');setFileOperationBusy(true);
+    try{
+      const pairs=manifest.records.map(r=>({folder_name:r.folder_name,score:r.score||'',from_name:r.new_name,to_name:r.original_name})),tx=buildRenameTransaction('undo',pairs);
+      const msg=await startRenameTransaction(tx);alert(msg);await scanRenameScoreFolders(true);
+    }catch(err){
+      console.error(err);renameCurrentTransaction=await loadRenameTransaction();showRenameTransactionPanel(renameCurrentTransaction);
+      if(renameCurrentTransaction){$('renameFolderStatus').textContent='撤销中断，可继续或恢复';showRenameNotice(['撤销过程中发生错误：'+(err?.message||err),'整批事务记录仍保留，可继续撤销或恢复到撤销开始前。']);alert('撤销过程中发生错误。事务记录已保留，请选择继续或恢复。');}
+      else{$('renameFolderStatus').textContent='撤销前检查未通过';showRenameNotice(['无法开始撤销：'+(err?.message||err)]);alert('无法开始撤销：'+(err?.message||err));}
+    }finally{setRenameUiBusy(false);setFileOperationBusy(false);hideRenameProgress();await updateRenameUndoAvailability();renderRenamePlan();}
+  }
+
+  function scheduleRenameRebuild(){
+    updateRenameTemplate();saveRenameSettings();clearTimeout(renameRebuildTimer);
+    renameRebuildTimer=setTimeout(()=>{rebuildRenameNamesOnly().catch(e=>showRenameNotice([e?.message||String(e)]));},120);
+  }
+
+
+  function resetRatings(){
+    if (fileOperationBusy || !items.length) return;
+    if (!confirm('确认清空这个文件夹的全部评分记录吗？\n\n不会删除或修改任何图片。')) return;
+    ratings={};
+    rebuildRatingCounts();
+    currentIndex=0;
+    saveState();
+    showCurrent();
+    toast('评分记录已清空');
+  }
+
+  async function toggleFullscreen(){
+    try{
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else await document.exitFullscreen();
+    }catch(_){ }
+  }
+
+  $('pickBtn').addEventListener('click',pickDirectory);
+  $('ratingReviewBtn').addEventListener('click',openRatingReview);
+  $('jumpUnratedBtn').addEventListener('click',jumpToFirstUnrated);
+  $('exportBtn').addEventListener('click',openExportModal);
+  $('renameOpenBtn').addEventListener('click',openRenameModal);
+  $('resetBtn').addEventListener('click',resetRatings);
+  $('pixel11').addEventListener('click',togglePixelOneToOne);
+  $('viewer').addEventListener('wheel',e=>{
+    if (!items.length || $('image').style.display === 'none' || isAnyModalOpen()) return;
+    e.preventDefault();
+    // 触控板/鼠标滚轮都使用平滑的乘法缩放；Shift 可稍快。
+    const speed = e.shiftKey ? 0.003 : 0.0015;
+    const factor = Math.exp(-e.deltaY * speed);
+    setViewScale(viewScale * factor, e.clientX, e.clientY);
+  }, {passive:false});
+  $('viewer').addEventListener('pointerdown',e=>{
+    if (e.button !== 0 || !canPan()) return;
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragBaseX = panX;
+    dragBaseY = panY;
+    $('viewer').classList.add('dragging');
+    $('viewer').setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  });
+  $('viewer').addEventListener('pointermove',e=>{
+    if (!isDragging) return;
+    panX = dragBaseX + (e.clientX - dragStartX);
+    panY = dragBaseY + (e.clientY - dragStartY);
+    applyImageTransform();
+    e.preventDefault();
+  });
+  function stopDrag(e){
+    if (!isDragging) return;
+    isDragging = false;
+    $('viewer').classList.remove('dragging');
+    if (e?.pointerId !== undefined){
+      try{ $('viewer').releasePointerCapture?.(e.pointerId); }catch(_){ }
+    }
+  }
+  $('viewer').addEventListener('pointerup',stopDrag);
+  $('viewer').addEventListener('pointercancel',stopDrag);
+  $('viewer').addEventListener('dblclick',()=>{
+    if (!items.length) return;
+    resetPan();
+    toast('已回到图片中心');
+  });
+  $('rate3').addEventListener('click',()=>queueViewerAction(()=>setRating(3)));
+  $('rate35').addEventListener('click',()=>queueViewerAction(()=>setRating(3.5)));
+  $('rate4').addEventListener('click',()=>queueViewerAction(()=>setRating(4)));
+  $('rateDup').addEventListener('click',()=>queueViewerAction(()=>setRating('重复')));
+  $('prevBtn').addEventListener('click',()=>queueViewerAction(()=>go(-1)));
+  $('nextBtn').addEventListener('click',()=>queueViewerAction(()=>go(1)));
+  $('fullBtn').addEventListener('click',toggleFullscreen);
+  $('ratingReviewCloseBtn').addEventListener('click',closeRatingReview);
+  $('ratingReviewFullscreenBtn').addEventListener('click',toggleRatingReviewFullscreen);
+  $('ratingReviewSize').addEventListener('input',e=>applyReviewCardSize(e.target.value,true));
+  $('ratingReviewJumpUnrated').addEventListener('click',jumpToFirstUnrated);
+  $('ratingReviewLoadMore').addEventListener('click',appendRatingReviewBatch);
+  $('ratingReviewFilters').addEventListener('click',e=>{
+    const btn = e.target.closest('[data-review-filter]');
+    if (!btn) return;
+    setReviewFilter(btn.dataset.reviewFilter);
+  });
+  $('ratingReviewGrid').addEventListener('click',e=>{
+    const btn = e.target.closest('[data-review-score]');
+    if (!btn) return;
+    const card = btn.closest('.review-item');
+    if (!card) return;
+    const raw = btn.dataset.reviewScore;
+    const score = raw === '重复' ? '重复' : Number(raw);
+    setRatingForName(card.dataset.itemName,score);
+  });
+  $('ratingReviewLightboxPrev').addEventListener('click',()=>navigateReviewLightbox(-1));
+  $('ratingReviewLightboxNext').addEventListener('click',()=>navigateReviewLightbox(1));
+  $('ratingReviewLightboxPixel').addEventListener('click',toggleReviewLightboxOneToOne);
+  $('ratingReviewLightboxClose').addEventListener('click',()=>closeReviewLightbox());
+  $('ratingReviewLightboxRateActions').addEventListener('click',e=>{
+    const btn=e.target.closest('[data-review-lightbox-score]');
+    if (!btn) return;
+    const raw=btn.dataset.reviewLightboxScore;
+    setReviewLightboxRating(raw==='重复'?'重复':Number(raw));
+  });
+  $('ratingReviewLightboxStage').addEventListener('wheel',e=>{
+    if (!reviewLightboxOpen) return;
+    e.preventDefault();
+    const speed=e.shiftKey?0.003:0.0015;
+    setReviewLightboxScale(reviewLightboxScale*Math.exp(-e.deltaY*speed),e.clientX,e.clientY);
+  },{passive:false});
+  $('ratingReviewLightboxStage').addEventListener('pointerdown',e=>{
+    if (!reviewLightboxOpen || e.button!==0 || !canPanReviewLightbox()) return;
+    reviewLightboxDragging=true;
+    reviewLightboxDragStartX=e.clientX;
+    reviewLightboxDragStartY=e.clientY;
+    reviewLightboxDragBaseX=reviewLightboxPanX;
+    reviewLightboxDragBaseY=reviewLightboxPanY;
+    $('ratingReviewLightboxStage').classList.add('dragging');
+    $('ratingReviewLightboxStage').setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  });
+  $('ratingReviewLightboxStage').addEventListener('pointermove',e=>{
+    if (!reviewLightboxDragging) return;
+    reviewLightboxPanX=reviewLightboxDragBaseX+(e.clientX-reviewLightboxDragStartX);
+    reviewLightboxPanY=reviewLightboxDragBaseY+(e.clientY-reviewLightboxDragStartY);
+    applyReviewLightboxTransform();
+    e.preventDefault();
+  });
+  function stopReviewLightboxDrag(e){
+    if (!reviewLightboxDragging) return;
+    reviewLightboxDragging=false;
+    $('ratingReviewLightboxStage').classList.remove('dragging');
+    if (e?.pointerId!==undefined){ try{ $('ratingReviewLightboxStage').releasePointerCapture?.(e.pointerId); }catch(_){ } }
+  }
+  $('ratingReviewLightboxStage').addEventListener('pointerup',stopReviewLightboxDrag);
+  $('ratingReviewLightboxStage').addEventListener('pointercancel',stopReviewLightboxDrag);
+  $('ratingReviewLightboxStage').addEventListener('dblclick',()=>{ if(reviewLightboxOpen) resetReviewLightboxPan(); });
+  $('ratingReviewModal').addEventListener('click',e=>{ if(e.target===$('ratingReviewModal')) closeRatingReview(); });
+  $('cancelExport').addEventListener('click',()=>$('exportModal').classList.remove('show'));
+  $('confirmExport').addEventListener('click',executeExport);
+  $('exportModal').addEventListener('click',e=>{ if(e.target===$('exportModal')&&!exportBusy) $('exportModal').classList.remove('show'); });
+  $('renameFolderPickBtn').addEventListener('click',pickRenameDirectory);
+  $('renameScanBtn').addEventListener('click',()=>scanRenameScoreFolders(true));
+  $('renameExportPreviewBtn').addEventListener('click',exportRenamePreview);
+  $('renameExecuteBtn').addEventListener('click',executeRename);
+  $('renameUndoBtn').addEventListener('click',undoLastRename);
+  $('renameContinueInterruptedBtn').addEventListener('click',continueInterruptedRename);
+  $('renameRecoverInterruptedBtn').addEventListener('click',recoverInterruptedRename);
+  $('renameCancelBtn').addEventListener('click',()=>{ if(!renameBusy&&!renameScanBusy) $('renameModal').classList.remove('show'); });
+  $('renameModal').addEventListener('click',e=>{ if(e.target===$('renameModal')&&!renameBusy&&!renameScanBusy) $('renameModal').classList.remove('show'); });
+  $('renameStatusFilter').addEventListener('change',()=>{saveRenameSettings();renderRenamePlan();});
+  ['renameType','renameTag','renameStartNo','renameDigits','renameSortMode','renameSeparator'].forEach(id=>{
+    $(id).addEventListener('input',scheduleRenameRebuild);
+    $(id).addEventListener('change',scheduleRenameRebuild);
+  });
+  loadRenameSettings();
+  detectRenameScoreFromFolder();
+  updateRenameTemplate();
+  renderRenamePlan();
+  loadReviewCardSize();
+
+  function isAnyModalOpen(){
+    return $('exportModal').classList.contains('show') || $('renameModal').classList.contains('show') || $('ratingReviewModal').classList.contains('show');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag=(e.target?.tagName || '').toLowerCase();
+    const k=e.key.toLowerCase();
+
+    // 评分预览大图复查层优先接管查看/评分快捷键；F 仍控制整个评分预览全屏。
+    if ($('ratingReviewModal').classList.contains('show')){
+      if (['input','textarea','select'].includes(tag)) return;
+      if (reviewLightboxOpen){
+        if (e.key==='Escape'){ e.preventDefault(); closeReviewLightbox(); }
+        else if (e.key==='ArrowLeft'){ e.preventDefault(); navigateReviewLightbox(-1); }
+        else if (e.key==='ArrowRight'){ e.preventDefault(); navigateReviewLightbox(1); }
+        else if (k==='1'){ e.preventDefault(); toggleReviewLightboxOneToOne(); }
+        else if (k==='a'){ e.preventDefault(); setReviewLightboxRating(3); }
+        else if (k==='s'){ e.preventDefault(); setReviewLightboxRating(3.5); }
+        else if (k==='d'){ e.preventDefault(); setReviewLightboxRating(4); }
+        else if (k==='r'){ e.preventDefault(); setReviewLightboxRating('重复'); }
+        else if (k==='f'){ e.preventDefault(); toggleRatingReviewFullscreen(); }
+        return;
+      }
+      if (k==='f'){
+        e.preventDefault();
+        toggleRatingReviewFullscreen();
+      }
+      return;
+    }
+
+    if (isAnyModalOpen()) return;
+    if (['input','textarea','select'].includes(tag)) return;
+    if (k==='1'){e.preventDefault();togglePixelOneToOne();}
+    else if (k==='a'){e.preventDefault();queueViewerAction(()=>setRating(3));}
+    else if (k==='s'){e.preventDefault();queueViewerAction(()=>setRating(3.5));}
+    else if (k==='d'){e.preventDefault();queueViewerAction(()=>setRating(4));}
+    else if (k==='r'){e.preventDefault();queueViewerAction(()=>setRating('重复'));}
+    else if (e.key==='ArrowLeft'){e.preventDefault();queueViewerAction(()=>go(-1));}
+    else if (e.key==='ArrowRight'){e.preventDefault();queueViewerAction(()=>go(1));}
+    else if (k==='f'){e.preventDefault();toggleFullscreen();}
+  });
+
+  window.addEventListener('resize',()=>{ if(items.length) applyImageTransform(); if(reviewLightboxOpen) applyReviewLightboxTransform(); });
+
+  window.addEventListener('beforeunload',()=>{
+    flushStateSave();
+    clearViewerPreload();
+    if (currentUrl) URL.revokeObjectURL(currentUrl);
+    clearReviewObjectUrls();
+    revokeReviewLightboxUrl();
+  });
+
+  if (!('showDirectoryPicker' in window)){
+    $('folderStatus').textContent='请使用最新版 Chrome / Edge 打开';
+  }else if (!window.isSecureContext){
+    $('folderStatus').textContent='浏览器安全策略可能限制文件夹权限，请优先使用 Chrome';
+  }
+
+  updateStats();
+})();
+</script>
+</body>
+</html>
