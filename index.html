@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片处理工具箱</title>
+
+<style>
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  background:#f5f6f8;
+  color:#1f2328;
+  font-family:-apple-system,BlinkMacSystemFont,
+  "PingFang SC","Microsoft YaHei",Arial,sans-serif;
+}
+
+.container{
+  max-width:1100px;
+  margin:0 auto;
+  padding:60px 24px;
+}
+
+.header{
+  margin-bottom:42px;
+}
+
+.header h1{
+  margin:0 0 12px;
+  font-size:38px;
+}
+
+.header p{
+  margin:0;
+  color:#667085;
+  font-size:16px;
+  line-height:1.7;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:20px;
+}
+
+.card{
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:18px;
+  padding:26px;
+  box-shadow:0 4px 16px rgba(0,0,0,.04);
+}
+
+.card h2{
+  margin:0 0 10px;
+  font-size:21px;
+}
+
+.card p{
+  color:#667085;
+  font-size:14px;
+  line-height:1.7;
+  min-height:48px;
+}
+
+.tag{
+  display:inline-block;
+  margin-bottom:15px;
+  background:#f1f5f9;
+  color:#475467;
+  padding:5px 9px;
+  border-radius:7px;
+  font-size:12px;
+}
+
+.actions{
+  display:flex;
+  gap:10px;
+  margin-top:22px;
+}
+
+.btn{
+  text-decoration:none;
+  border-radius:9px;
+  padding:10px 16px;
+  font-size:14px;
+  font-weight:600;
+  border:1px solid #d0d5dd;
+  color:#344054;
+  background:#fff;
+}
+
+.btn.primary{
+  color:#fff;
+  background:#1677ff;
+  border-color:#1677ff;
+}
+
+.btn:hover{
+  opacity:.88;
+}
+
+.footer{
+  margin-top:48px;
+  padding-top:24px;
+  border-top:1px solid #e5e7eb;
+  color:#98a2b3;
+  font-size:13px;
+}
+
+@media(max-width:720px){
+  .grid{
+    grid-template-columns:1fr;
+  }
+
+  .header h1{
+    font-size:30px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>图片处理工具箱</h1>
+    <p>
+      本地图片筛选、清理、裁剪、批量重命名与格式转换工具。
+      图片主要在浏览器本地处理，无需上传到服务器。
+    </p>
+  </div>
+
+  <div class="grid">
+
+    <!-- HEIC 转 PNG -->
+    <div class="card">
+      <span class="tag">格式转换</span>
+      <h2>HEIC → PNG</h2>
+      <p>
+        批量将 HEIC / HEIF 图片转换为 PNG，
+        支持大批量处理、尺寸校验与异常记录。
+      </p>
+
+      <div class="actions">
+        <a class="btn primary"
+           href="HEIC转PNG_v3_大批量安全版.html"
+           target="_blank">
+          在线使用
+        </a>
+
+        <a class="btn"
+           href="HEIC转PNG_v3_大批量安全版.html"
+           download>
+          下载 HTML
+        </a>
+      </div>
+    </div>
+
+
+    <!-- 低像素清理 -->
+    <div class="card">
+      <span class="tag">图片清理</span>
+      <h2>低像素图片清理</h2>
+      <p>
+        根据图片总像素点数检测低分辨率图片，
+        适合数千张及大型图片库批量筛选。
+      </p>
+
+      <div class="actions">
+        <a class="btn primary"
+           href="图片低于1k总像素点数删除脚本_20GB大图库最终安全版_v3.html"
+           target="_blank">
+          在线使用
+        </a>
+
+        <a class="btn"
+           href="图片低于1k总像素点数删除脚本_20GB大图库最终安全版_v3.html"
+           download>
+          下载 HTML
+        </a>
+      </div>
+    </div>
+
+
+    <!-- 批量重命名 -->
+    <div class="card">
+      <span class="tag">文件管理</span>
+      <h2>图片批量重命名</h2>
+      <p>
+        对大量图片进行统一命名，
+        适合整理数据集和图片素材文件。
+      </p>
+
+      <div class="actions">
+        <a class="btn primary"
+           href="图片批量重命名_安全增强版_直接打开.html"
+           target="_blank">
+          在线使用
+        </a>
+
+        <a class="btn"
+           href="图片批量重命名_安全增强版_直接打开.html"
+           download>
+          下载 HTML
+        </a>
+      </div>
+    </div>
+
+
+    <!-- 黑白边裁剪 -->
+    <div class="card">
+      <span class="tag">自动裁剪</span>
+      <h2>黑白边一键裁剪</h2>
+      <p>
+        自动识别黑边、白边、相纸边框、多层边框
+        和轻微倾斜残边。
+      </p>
+
+      <div class="actions">
+        <a class="btn primary"
+           href="黑白边一键裁剪_v9_复杂边框增强版.html"
+           target="_blank">
+          在线使用
+        </a>
+
+        <a class="btn"
+           href="黑白边一键裁剪_v9_复杂边框增强版.html"
+           download>
+          下载 HTML
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    Image Filter Tools · 本地图片处理工具
+  </div>
+
+</div>
+
+</body>
+</html>
