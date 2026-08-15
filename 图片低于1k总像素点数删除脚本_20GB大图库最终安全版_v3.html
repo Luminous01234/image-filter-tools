@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>大图库低像素图片清理器 · 最终安全版</title>
+<style>
+:root{--bg:#141414;--panel:#1f1f1f;--panel2:#181818;--line:#373737;--text:#f3f3f3;--muted:#a8a8a8;--accent:#ff5a3c;--ok:#6bd67b;--warn:#ffc75b;--danger:#ff6464}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}
+.app{width:min(1200px,calc(100% - 32px));margin:26px auto 56px}h1{font-size:28px;margin:0 0 8px}.sub{color:var(--muted);line-height:1.7;margin-bottom:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;font-size:13px;color:#d0d0d0;margin-bottom:7px}
+select{width:100%;border:1px solid #444;background:#151515;color:var(--text);border-radius:9px;padding:11px 12px;font-size:14px;outline:none}select:disabled{opacity:.55}
+.rule{margin-top:14px;padding:12px 14px;border:1px dashed #4b4b4b;border-radius:10px;background:#171717;color:#ddd;line-height:1.7}.rule b{color:var(--warn)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}button{border:0;border-radius:9px;padding:11px 16px;font-size:14px;font-weight:700;color:#fff;background:#343434;cursor:pointer}button.primary{background:var(--accent)}button.danger{background:#963737}button:disabled{opacity:.4;cursor:not-allowed}.status{margin-left:auto;color:var(--muted);font-size:13px}
+.progress{width:100%;height:10px;background:#111;border:1px solid #333;border-radius:999px;overflow:hidden;margin-top:14px;display:none}.progress>div{height:100%;width:0;background:var(--accent)}
+.validity{display:none;margin-top:12px;padding:10px 12px;border-radius:9px;background:#382e19;border:1px solid #69501d;color:#ffd77d;font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px}.stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px}.stat .k{font-size:12px;color:var(--muted);margin-bottom:5px}.stat .v{font-size:21px;font-weight:700}.stat.ok .v{color:var(--ok)}.stat.danger .v{color:var(--danger)}.stat.warn .v{color:var(--warn)}
+.table-toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:10px}.table-toolbar>div{min-width:180px}.table-toolbar .grow{flex:1}.small-note{color:var(--muted);font-size:12px;line-height:1.6}
+.table-wrap{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:56vh}table{width:100%;border-collapse:collapse;min-width:930px;background:#181818}th,td{padding:10px 12px;border-bottom:1px solid #303030;text-align:left;font-size:13px;vertical-align:middle}th{position:sticky;top:0;background:#292929;z-index:2}td.path{color:#aaa;word-break:break-all}.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#333;font-size:12px}.bad{color:var(--danger)}.warn-text{color:var(--warn)}.empty{color:#888;text-align:center;padding:40px 12px}
+.note{color:#aaa;font-size:13px;line-height:1.7;margin-top:12px}.log{display:none;margin-top:12px;padding:12px;max-height:180px;overflow:auto;white-space:pre-wrap;border:1px solid #333;border-radius:9px;background:#111;color:#ccc;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}
+@media(max-width:1050px){.stats{grid-template-columns:repeat(3,1fr)}}@media(max-width:760px){.controls,.stats{grid-template-columns:1fr 1fr}.status{width:100%;margin-left:0}}@media(max-width:520px){.controls,.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>大图库低像素图片清理器 · 最终安全版</h1>
+<div class="sub">专为 8000 张 / 20GB+ 大图库设计。采用“宁可漏删，也不误删”的永久删除策略：只有文件结构和尺寸都能可靠确认、且删除前二次复核仍满足条件的图片才会自动删除。</div>
+
+<div class="panel">
+  <div class="controls">
+    <div><label for="recursive">扫描范围</label><select id="recursive"><option value="yes" selected>包含所有子文件夹</option><option value="no">只扫描当前文件夹</option></select></div>
+    <div><label for="previewLimit">页面最多预览</label><select id="previewLimit"><option value="200">200 条</option><option value="300" selected>300 条</option><option value="500">500 条</option></select></div>
+  </div>
+
+  <div class="rule">
+    固定判定规则：<b>宽 × 高 &lt; 1,048,576 像素（1024 × 1024）</b> → 待删除。<br>
+    只按总像素点数判断，不要求宽和高分别达到 1024。例如 2000×600 = 1,200,000 像素会保留；800×1200 = 960,000 像素会进入待删除。阈值已锁定，避免误修改。
+  </div>
+
+  <div class="actions">
+    <button id="pickBtn" class="primary">① 选择图片文件夹</button>
+    <button id="scanBtn" disabled>② 扫描像素点数</button>
+    <button id="csvBtn" disabled>导出待删除 CSV</button>
+    <button id="anomalyCsvBtn" disabled>导出异常清单 CSV</button>
+    <button id="deleteBtn" class="danger" disabled>③ 永久删除待删除图片</button>
+    <span class="status" id="status">尚未选择文件夹</span>
+  </div>
+  <div class="progress" id="progress"><div id="progressBar"></div></div>
+  <div class="validity" id="validity">扫描范围已经改变。旧结果仅供查看，必须重新扫描后才能导出或删除。</div>
+  <div class="note">
+    安全解析：JPEG 严格校验 SOF 段；PNG 校验完整签名与 IHDR；WebP 校验 RIFF/Chunk/VP8 同步码；BMP 区分 CORE/INFO/V4/V5 头；TIFF/BigTIFF 遍历主 IFD 多页链并以最大页面像素判断。检测到 SubIFD、结构损坏或无法可靠解析时，一律进入“需人工检查”。<br>
+    AVIF / HEIC / HEIF 不做完整解码，直接进入“需人工检查”，避免压缩文件很小但解码后像素极大的图片造成内存峰值。永久删除前会再次检查文件大小、修改时间和像素尺寸；任何变化或异常都会跳过。删除不会进入 macOS 废纸篓。
+  </div>
+</div>
+
+<div class="panel">
+  <div class="stats">
+    <div class="stat"><div class="k">发现图片</div><div class="v" id="countAll">0</div></div>
+    <div class="stat ok"><div class="k">符合要求</div><div class="v" id="countKeep">0</div></div>
+    <div class="stat danger"><div class="k">待删除</div><div class="v" id="countDelete">0</div></div>
+    <div class="stat warn"><div class="k">需人工检查</div><div class="v" id="countManual">0</div></div>
+    <div class="stat"><div class="k">读取失败</div><div class="v" id="countError">0</div></div>
+    <div class="stat"><div class="k">待删除总大小</div><div class="v" id="sizeDelete">0 B</div></div>
+  </div>
+
+  <div class="table-toolbar">
+    <div><label for="viewMode">查看列表</label><select id="viewMode"><option value="delete" selected>待删除</option><option value="manual">需人工检查</option><option value="error">读取失败</option></select></div>
+    <div class="grow small-note" id="tableHint">待删除列表只展示预览上限，真正删除会处理全部已确认候选。</div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:55px">#</th><th>文件</th><th style="width:140px">尺寸</th><th style="width:120px">总像素</th><th style="width:110px">大小</th><th>状态 / 原因</th></tr></thead>
+      <tbody id="tbody"><tr><td colspan="6" class="empty">请选择文件夹并扫描</td></tr></tbody>
+    </table>
+  </div>
+  <div class="log" id="log"></div>
+</div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $=id=>document.getElementById(id);
+const IMAGE_EXT=new Set(['jpg','jpeg','png','webp','gif','bmp','tif','tiff','avif','heic','heif']);
+const PIXEL_BASE=1024;
+const PIXEL_THRESHOLD=PIXEL_BASE*PIXEL_BASE;
+const PARSER_VERSION=3;
+let rootHandle=null,candidates=[],manual=[],errors=[],totalCount=0,keepCount=0,scanning=false,deleting=false;
+let lastScanFingerprint=null,scanValid=false;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const logLines=[];
+
+// CORE_START
+function isBelowPixelThreshold(width,height){
+  const w=Number(width),h=Number(height);
+  return Number.isFinite(w)&&Number.isFinite(h)&&w>0&&h>0&&w*h<PIXEL_THRESHOLD;
+}
+function scanFingerprint({recursive}){
+  return JSON.stringify({recursive:Boolean(recursive),parserVersion:PARSER_VERSION,pixelThreshold:PIXEL_THRESHOLD});
+}
+function sameFileSnapshot(a,b){
+  return Number(a?.size)===Number(b?.size)&&Number(a?.lastModified)===Number(b?.lastModified);
+}
+async function readBuf(file,start,length){
+  if(!Number.isFinite(start)||!Number.isFinite(length)||start<0||length<0||start>file.size)return new ArrayBuffer(0);
+  return file.slice(start,Math.min(file.size,start+length)).arrayBuffer();
+}
+function safeBigIntToNumber(v){return v>=0n&&v<=BigInt(Number.MAX_SAFE_INTEGER)?Number(v):null}
+function ascii(u8,start,len){return String.fromCharCode(...u8.slice(start,start+len))}
+
+function parsePngDimensions(buf){
+  const u8=new Uint8Array(buf);if(u8.length<33)return null;
+  const sig=[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a];for(let i=0;i<8;i++)if(u8[i]!==sig[i])return null;
+  const v=new DataView(buf);if(v.getUint32(8,false)!==13||ascii(u8,12,4)!=='IHDR')return null;
+  const width=v.getUint32(16,false),height=v.getUint32(20,false),bitDepth=u8[24],colorType=u8[25],compression=u8[26],filter=u8[27],interlace=u8[28];
+  const validDepths={0:[1,2,4,8,16],2:[8,16],3:[1,2,4,8],4:[8,16],6:[8,16]};
+  if(!width||!height||!validDepths[colorType]?.includes(bitDepth)||compression!==0||filter!==0||![0,1].includes(interlace))return null;
+  return{width,height,method:'header-png'};
+}
+function parseGifDimensions(buf){
+  const u8=new Uint8Array(buf);if(u8.length<10)return null;const sig=ascii(u8,0,6);if(sig!=='GIF87a'&&sig!=='GIF89a')return null;
+  const v=new DataView(buf),width=v.getUint16(6,true),height=v.getUint16(8,true);return width&&height?{width,height,method:'header-gif'}:null;
+}
+function parseBmpDimensions(buf){
+  const u8=new Uint8Array(buf);if(u8.length<26||u8[0]!==0x42||u8[1]!==0x4d)return null;const v=new DataView(buf),dib=v.getUint32(14,true);
+  if(dib===12){
+    const width=v.getUint16(18,true),height=v.getUint16(20,true),planes=v.getUint16(22,true),bpp=v.getUint16(24,true);
+    if(!width||!height||planes!==1||![1,4,8,24].includes(bpp))return null;
+    return{width,height,method:'header-bmp-core'};
+  }
+  if([40,52,56,108,124].includes(dib)){
+    if(u8.length<30)return null;const width=v.getInt32(18,true),rawH=v.getInt32(22,true),height=Math.abs(rawH),planes=v.getUint16(26,true),bpp=v.getUint16(28,true);
+    if(width<=0||height<=0||planes!==1||![1,4,8,16,24,32].includes(bpp))return null;
+    return{width,height,method:'header-bmp-info'};
+  }
+  return null;
+}
+function parseWebPLosslessDimensions(buf){
+  const u8=new Uint8Array(buf);if(u8.length<25||u8[20]!==0x2f)return null;
+  const bits=(u8[21]|(u8[22]<<8)|(u8[23]<<16)|(u8[24]<<24))>>>0;
+  return{width:(bits&0x3fff)+1,height:((bits>>>14)&0x3fff)+1};
+}
+function parseWebPDimensions(buf,fileSize){
+  const u8=new Uint8Array(buf);if(u8.length<20||ascii(u8,0,4)!=='RIFF'||ascii(u8,8,4)!=='WEBP')return null;const v=new DataView(buf);
+  const riffSize=v.getUint32(4,true),declaredTotal=riffSize+8;if(declaredTotal<20||declaredTotal>fileSize)return null;
+  const type=ascii(u8,12,4),chunkSize=v.getUint32(16,true);if(chunkSize>fileSize-20)return null;
+  if(type==='VP8X'){
+    if(chunkSize!==10||u8.length<30||u8[21]!==0||u8[22]!==0||u8[23]!==0)return null;
+    const width=1+u8[24]+(u8[25]<<8)+(u8[26]<<16),height=1+u8[27]+(u8[28]<<8)+(u8[29]<<16);return width&&height?{width,height,method:'header-webp-vp8x'}:null;
+  }
+  if(type==='VP8 '){
+    if(chunkSize<10||u8.length<30||(u8[20]&1)!==0||u8[23]!==0x9d||u8[24]!==0x01||u8[25]!==0x2a)return null;
+    const width=v.getUint16(26,true)&0x3fff,height=v.getUint16(28,true)&0x3fff;return width&&height?{width,height,method:'header-webp-vp8'}:null;
+  }
+  if(type==='VP8L'){
+    if(chunkSize<5||u8.length<25)return null;const d=parseWebPLosslessDimensions(buf);return d?{...d,method:'header-webp-vp8l'}:null;
+  }
+  return null;
+}
+
+async function parseTiffDimensions(file){
+  if(file.size<16)return null;const head=await readBuf(file,0,16);const u8=new Uint8Array(head),v=new DataView(head);
+  const little=u8[0]===0x49&&u8[1]===0x49,big=u8[0]===0x4d&&u8[1]===0x4d;if(!little&&!big)return null;const magic=v.getUint16(2,little);
+  let offset=null,bigTiff=false;
+  if(magic===42){offset=v.getUint32(4,little)}
+  else if(magic===43){if(v.getUint16(4,little)!==8||v.getUint16(6,little)!==0)return null;offset=safeBigIntToNumber(v.getBigUint64(8,little));bigTiff=true}
+  else return null;
+  if(offset===null)return null;
+  const visited=new Set();let pageCount=0,best=null;
+  while(offset!==0){
+    if(pageCount>=256)return{manualReason:'TIFF 主 IFD 页数超过 256，安全模式停止自动判断'};
+    if(visited.has(offset))return{manualReason:'TIFF IFD 链出现循环，无法安全确认尺寸'};visited.add(offset);
+    if(offset<0||offset>=file.size)return{manualReason:'TIFF IFD 偏移超出文件范围'};
+    if(!bigTiff){
+      if(offset+2>file.size)return{manualReason:'TIFF IFD 不完整'};const cbuf=await readBuf(file,offset,2);if(cbuf.byteLength<2)return{manualReason:'TIFF IFD 不完整'};
+      const count=new DataView(cbuf).getUint16(0,little);if(count>4096)return{manualReason:'TIFF IFD 条目异常过多'};
+      const block=await readBuf(file,offset+2,count*12+4);if(block.byteLength<count*12+4)return{manualReason:'TIFF IFD 条目被截断'};const ev=new DataView(block);
+      let width=null,height=null,hasSubIFD=false;
+      for(let i=0;i<count;i++){
+        const o=i*12,tag=ev.getUint16(o,little),type=ev.getUint16(o+2,little),num=ev.getUint32(o+4,little);if(tag===330){hasSubIFD=true;continue}if(tag!==256&&tag!==257)continue;
+        if(num!==1||![3,4].includes(type))return{manualReason:'TIFF 宽高标签使用了不支持的字段类型'};
+        const value=type===3?ev.getUint16(o+8,little):ev.getUint32(o+8,little);if(!value)return{manualReason:'TIFF 宽高值无效'};if(tag===256)width=value;else height=value;
+      }
+      if(hasSubIFD)return{manualReason:'检测到 TIFF SubIFD；为避免缩略图/子图影响判断，转人工检查'};
+      if(!width||!height)return{manualReason:'TIFF 页面缺少可靠的宽高标签'};
+      const pixels=width*height;if(!best||pixels>best.pixels)best={width,height,pixels};
+      offset=ev.getUint32(count*12,little);pageCount++;
+    }else{
+      if(offset+8>file.size)return{manualReason:'BigTIFF IFD 不完整'};const cbuf=await readBuf(file,offset,8);if(cbuf.byteLength<8)return{manualReason:'BigTIFF IFD 不完整'};
+      const count=safeBigIntToNumber(new DataView(cbuf).getBigUint64(0,little));if(count===null||count>4096)return{manualReason:'BigTIFF IFD 条目异常过多'};
+      const block=await readBuf(file,offset+8,count*20+8);if(block.byteLength<count*20+8)return{manualReason:'BigTIFF IFD 条目被截断'};const ev=new DataView(block);
+      let width=null,height=null,hasSubIFD=false;
+      for(let i=0;i<count;i++){
+        const o=i*20,tag=ev.getUint16(o,little),type=ev.getUint16(o+2,little),num=ev.getBigUint64(o+4,little);if(tag===330){hasSubIFD=true;continue}if(tag!==256&&tag!==257)continue;
+        if(num!==1n||![3,4,16].includes(type))return{manualReason:'BigTIFF 宽高标签使用了不支持的字段类型'};
+        let value=null;if(type===3)value=ev.getUint16(o+12,little);else if(type===4)value=ev.getUint32(o+12,little);else value=safeBigIntToNumber(ev.getBigUint64(o+12,little));
+        if(!value)return{manualReason:'BigTIFF 宽高值无效'};if(tag===256)width=value;else height=value;
+      }
+      if(hasSubIFD)return{manualReason:'检测到 BigTIFF SubIFD；为避免缩略图/子图影响判断，转人工检查'};
+      if(!width||!height)return{manualReason:'BigTIFF 页面缺少可靠的宽高标签'};
+      const pixels=width*height;if(!Number.isSafeInteger(pixels))return{manualReason:'BigTIFF 像素数量超过 JavaScript 安全整数范围'};if(!best||pixels>best.pixels)best={width,height,pixels};
+      offset=safeBigIntToNumber(ev.getBigUint64(count*20,little));if(offset===null)return{manualReason:'BigTIFF 下一 IFD 偏移超出安全整数范围'};pageCount++;
+    }
+  }
+  return best?{width:best.width,height:best.height,method:bigTiff?'header-bigtiff-multipage':'header-tiff-multipage',pageCount}:null;
+}
+
+async function getJpegDimensionsIncremental(file,maxHeader=4*1024*1024){
+  async function read(start,len){return new Uint8Array(await readBuf(file,start,len))}
+  if(file.size<4)return null;const soi=await read(0,2);if(soi[0]!==0xff||soi[1]!==0xd8)return null;let pos=2;
+  const sofSet=new Set([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf]);
+  while(pos<file.size&&pos<maxHeader){
+    const mh=await read(pos,16);if(!mh.length||mh[0]!==0xff)return null;let j=0;while(j<mh.length&&mh[j]===0xff)j++;if(j>=mh.length){pos+=j;continue}
+    const marker=mh[j],afterMarker=pos+j+1;if(marker===0xd9||marker===0xda)return null;
+    if(marker===0x01||marker===0xd8||(marker>=0xd0&&marker<=0xd7)){pos=afterMarker;continue}
+    const lenBytes=await read(afterMarker,2);if(lenBytes.length<2)return null;const segLen=(lenBytes[0]<<8)|lenBytes[1];if(segLen<2||afterMarker+segLen>file.size)return null;
+    if(sofSet.has(marker)){
+      if(segLen<11)return null;const h=await read(afterMarker,8);if(h.length<8)return null;const precision=h[2],height=(h[3]<<8)|h[4],width=(h[5]<<8)|h[6],components=h[7];
+      if(precision<1||precision>16||!width||!height||components<1||components>16||segLen!==8+3*components)return null;
+      return{width,height,method:'header-jpeg'};
+    }
+    pos=afterMarker+segLen;
+  }
+  return null;
+}
+// CORE_END
+
+function extOf(name){const i=name.lastIndexOf('.');return i>=0?name.slice(i+1).toLowerCase():''}
+function humanBytes(n){if(!Number.isFinite(n)||n<=0)return'0 B';const u=['B','KB','MB','GB','TB'];let i=0,v=n;while(v>=1024&&i<u.length-1){v/=1024;i++}return`${v>=100||i===0?v.toFixed(0):v.toFixed(1)} ${u[i]}`}
+function humanPixels(n){if(!Number.isFinite(n))return'—';if(n>=1e9)return(n/1e9).toFixed(2)+' Gpx';if(n>=1e6)return(n/1e6).toFixed(2)+' Mpx';if(n>=1e3)return(n/1e3).toFixed(0)+' Kpx';return String(n)}
+function csvCell(s){return`"${String(s??'').replace(/"/g,'""')}"`}
+function currentConfig(){return{recursive:$('recursive').value==='yes'}}
+function currentFingerprint(){return scanFingerprint(currentConfig())}
+function isCurrentScanValid(){return!!rootHandle&&scanValid&&lastScanFingerprint===currentFingerprint()}
+function setConfigDisabled(disabled){$('recursive').disabled=disabled}
+function invalidateScan(){if(scanning||deleting)return;scanValid=false;$('validity').style.display=(totalCount||candidates.length||manual.length||errors.length)?'block':'none';$('status').textContent=rootHandle?'扫描范围已修改，请重新扫描':'尚未选择文件夹';render()}
+function log(msg,clear=false){if(clear)logLines.length=0;logLines.push(msg);if(logLines.length>180)logLines.splice(0,logLines.length-180);const el=$('log');el.style.display='block';el.textContent=logLines.join('\n');el.scrollTop=el.scrollHeight}
+function setProgress(done,total,text){$('progress').style.display='block';$('progressBar').style.width=(total?Math.min(100,done/total*100):0).toFixed(1)+'%';if(text)$('status').textContent=text}
+function hideProgress(){$('progress').style.display='none';$('progressBar').style.width='0'}
+
+async function verifyPermission(){if(!rootHandle)return false;const o={mode:'readwrite'};try{if((await rootHandle.queryPermission(o))==='granted')return true;return(await rootHandle.requestPermission(o))==='granted'}catch{return false}}
+async function collectFiles(root,recursive,out){
+  const stack=[{dir:root,rel:''}];
+  while(stack.length){
+    const {dir,rel}=stack.pop();
+    for await(const[name,handle]of dir.entries()){
+      if(handle.kind==='file'){const ext=extOf(name);if(IMAGE_EXT.has(ext))out.push({name,ext,handle,parentHandle:dir,relPath:rel?`${rel}/${name}`:name})}
+      else if(handle.kind==='directory'&&recursive)stack.push({dir:handle,rel:rel?`${rel}/${name}`:name});
+      if(out.length&&out.length%400===0)await sleep(0);
+    }
+  }
+}
+
+async function resolveDimensions(file,ext){
+  if(ext==='jpg'||ext==='jpeg'){const d=await getJpegDimensionsIncremental(file);return d||{manualReason:'JPEG 文件头或 SOF 结构不完整，无法安全确认尺寸'}}
+  if(ext==='tif'||ext==='tiff'){const d=await parseTiffDimensions(file);return d||{manualReason:'TIFF/BigTIFF 结构无法安全解析'}}
+  if(ext==='avif'||ext==='heic'||ext==='heif')return{manualReason:`${ext.toUpperCase()} 不进行完整解码，安全模式转人工检查`};
+  const n=Math.min(file.size,64*1024);if(!n)return{manualReason:'空文件或无法读取文件头'};const buf=await file.slice(0,n).arrayBuffer();let d=null;
+  if(ext==='png')d=parsePngDimensions(buf);else if(ext==='gif')d=parseGifDimensions(buf);else if(ext==='bmp')d=parseBmpDimensions(buf);else if(ext==='webp')d=parseWebPDimensions(buf,file.size);
+  return d||{manualReason:`${ext.toUpperCase()} 文件头结构不完整或不符合规范，转人工检查`};
+}
+
+function resultSource(){const mode=$('viewMode').value;if(mode==='manual')return manual;if(mode==='error')return errors;return candidates}
+function render(){
+  $('countAll').textContent=totalCount;$('countKeep').textContent=keepCount;$('countDelete').textContent=candidates.length;$('countManual').textContent=manual.length;$('countError').textContent=errors.length;$('sizeDelete').textContent=humanBytes(candidates.reduce((s,x)=>s+(x.size||0),0));
+  const valid=isCurrentScanValid();$('validity').style.display=(!valid&&(totalCount||candidates.length||manual.length||errors.length))?'block':'none';
+  $('deleteBtn').disabled=!candidates.length||scanning||deleting||!valid;$('csvBtn').disabled=!candidates.length||scanning||deleting||!valid;$('anomalyCsvBtn').disabled=!(manual.length||errors.length)||scanning||deleting||!valid;
+  const source=resultSource(),limit=Math.max(1,parseInt($('previewLimit').value||'300',10)),shown=source.slice(0,limit),tbody=$('tbody'),mode=$('viewMode').value;tbody.innerHTML='';
+  $('tableHint').textContent=mode==='delete'?'待删除列表只展示预览上限，真正删除会处理全部已确认候选。':mode==='manual'?'这些图片不会自动删除，需要你人工检查。':'这些图片读取文件失败，不会自动删除。';
+  if(!shown.length){tbody.innerHTML=`<tr><td colspan="6" class="empty">${totalCount?'当前列表为空':'请选择文件夹并扫描'}</td></tr>`;return}
+  shown.forEach((it,i)=>{const tr=document.createElement('tr');const status=mode==='delete'?'<span class="badge bad">待删除</span>':mode==='manual'?'<span class="badge warn-text">人工检查</span>':'<span class="badge warn-text">读取失败</span>';tr.innerHTML=`<td>${i+1}</td><td class="path"></td><td>${it.width&&it.height?`${it.width}×${it.height}`:'—'}</td><td>${it.pixels?humanPixels(it.pixels):'—'}</td><td>${humanBytes(it.size||0)}</td><td>${status}<div class="small-note reason"></div></td>`;tr.children[1].textContent=it.relPath;tr.querySelector('.reason').textContent=it.reason||it.error||(it.pageCount>1?`TIFF 主 IFD 共 ${it.pageCount} 页，按最大页面判断`:'');tbody.appendChild(tr)});
+  if(source.length>shown.length){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="6" class="empty">页面仅显示前 ${shown.length} 条；实际 ${source.length} 条。CSV 会包含全部。</td>`;tbody.appendChild(tr)}
+}
+
+async function pickDirectory(){
+  if(!('showDirectoryPicker'in window)){alert('当前浏览器不支持本地文件夹读写。请使用最新版 Chrome / Edge。');return}
+  try{rootHandle=await window.showDirectoryPicker({mode:'readwrite'});$('status').textContent=`已选择：${rootHandle.name}`;$('scanBtn').disabled=false;candidates=[];manual=[];errors=[];totalCount=0;keepCount=0;lastScanFingerprint=null;scanValid=false;render()}catch(err){if(err?.name!=='AbortError')alert('选择文件夹失败：'+(err?.message||err))}
+}
+
+async function scan(){
+  if(!rootHandle||scanning)return;scanning=true;scanValid=false;setConfigDisabled(true);$('pickBtn').disabled=true;$('scanBtn').disabled=true;$('deleteBtn').disabled=true;$('csvBtn').disabled=true;$('anomalyCsvBtn').disabled=true;log('开始扫描…',true);
+  const cfg=currentConfig(),fp=scanFingerprint(cfg);candidates=[];manual=[];errors=[];totalCount=0;keepCount=0;
+  try{
+    const files=[];$('status').textContent='正在收集图片文件…';await collectFiles(rootHandle,cfg.recursive,files);totalCount=files.length;render();log(`发现 ${totalCount} 张图片。`);if(!totalCount){lastScanFingerprint=fp;scanValid=true;$('status').textContent='没有发现支持格式图片';return}
+    let next=0,done=0;const concurrency=3;
+    async function worker(){
+      while(true){
+        const idx=next++;if(idx>=files.length)return;const item=files[idx];
+        try{
+          const file=await item.handle.getFile();item.size=file.size;item.lastModified=file.lastModified;const d=await resolveDimensions(file,item.ext);
+          if(d.manualReason){item.reason=d.manualReason;manual.push(item)}
+          else{item.width=d.width;item.height=d.height;item.pixels=d.width*d.height;item.method=d.method;item.pageCount=d.pageCount||1;if(isBelowPixelThreshold(d.width,d.height))candidates.push(item);else keepCount++}
+        }catch(err){item.error=err?.message||String(err);errors.push(item)}
+        finally{done++;if(done%15===0||done===files.length)setProgress(done,files.length,`扫描：${done} / ${files.length}`);if(done%60===0)await sleep(0)}
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(concurrency,files.length)},()=>worker()));for(const arr of[candidates,manual,errors])arr.sort((a,b)=>a.relPath.localeCompare(b.relPath,'zh-CN',{numeric:true}));
+    lastScanFingerprint=fp;scanValid=true;$('status').textContent=`扫描完成：待删除 ${candidates.length} 张`;log(`符合要求：${keepCount} 张`);log(`待删除：${candidates.length} 张，约 ${humanBytes(candidates.reduce((s,x)=>s+(x.size||0),0))}`);if(manual.length)log(`需人工检查：${manual.length} 张（不会自动删除）`);if(errors.length)log(`读取失败：${errors.length} 张（不会自动删除）`);
+  }catch(err){console.error(err);$('status').textContent='扫描失败';alert('扫描失败：'+(err?.message||err));log('扫描失败：'+(err?.message||err))}
+  finally{scanning=false;$('pickBtn').disabled=false;$('scanBtn').disabled=false;setConfigDisabled(false);hideProgress();render()}
+}
+
+function ensureFreshScan(){if(!isCurrentScanValid()){alert('扫描范围或结果已失效，请重新扫描后再继续。');return false}return true}
+function downloadCsv(name,rows){const csv='\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\n'),blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function exportCandidates(){if(!ensureFreshScan()||!candidates.length)return;downloadCsv(`总像素不足待删除清单_${candidates.length}张.csv`,[['相对路径','宽度','高度','总像素点','文件大小(bytes)','扫描时修改时间','判定规则'],...candidates.map(x=>[x.relPath,x.width,x.height,x.pixels,x.size||0,x.lastModified||0,`pixels<${PIXEL_THRESHOLD}`])])}
+function exportAnomalies(){if(!ensureFreshScan()||(!manual.length&&!errors.length))return;downloadCsv(`需人工检查与读取失败_${manual.length+errors.length}张.csv`,[['类别','相对路径','文件大小(bytes)','原因'],...manual.map(x=>['需人工检查',x.relPath,x.size||0,x.reason||'']),...errors.map(x=>['读取失败',x.relPath,x.size||0,x.error||''])])}
+
+async function deleteCandidates(){
+  if(!rootHandle||!candidates.length||deleting||!ensureFreshScan())return;const totalSize=candidates.reduce((s,x)=>s+(x.size||0),0);
+  const ok=confirm(`即将尝试永久删除 ${candidates.length} 张图片（约 ${humanBytes(totalSize)}）。\n\n固定规则：宽×高 < ${PIXEL_THRESHOLD.toLocaleString()} 像素（1024×1024）\n\n删除前会再次校验文件未发生变化，并再次严格解析当前像素尺寸。任何异常都会跳过。\n不会进入 macOS 废纸篓，无法撤销。\n\n确认继续吗？`);if(!ok)return;
+  const phrase=prompt(`为防止误操作，请输入：永久删除${candidates.length}张`);if(phrase!==`永久删除${candidates.length}张`){alert('确认文字不匹配，已取消。');return}if(!await verifyPermission()){alert('没有获得文件夹写入权限。');return}
+  deleting=true;setConfigDisabled(true);$('pickBtn').disabled=true;$('scanBtn').disabled=true;$('deleteBtn').disabled=true;$('csvBtn').disabled=true;$('anomalyCsvBtn').disabled=true;log('开始删除前二次校验…',true);
+  let deleted=0,failed=0,changed=0,rejected=0;
+  try{
+    for(let i=0;i<candidates.length;i++){
+      const item=candidates[i];
+      try{
+        const currentHandle=await item.parentHandle.getFileHandle(item.name);const currentFile=await currentHandle.getFile();if(!sameFileSnapshot(item,currentFile)){changed++;log(`跳过（文件已变化）：${item.relPath}`);continue}
+        const d=await resolveDimensions(currentFile,item.ext);if(!d||d.manualReason){rejected++;log(`跳过（无法再次安全确认尺寸）：${item.relPath}`);continue}
+        if(!isBelowPixelThreshold(d.width,d.height)){rejected++;log(`跳过（复核后不满足删除条件）：${item.relPath}；${d.width}×${d.height}`);continue}
+        await item.parentHandle.removeEntry(item.name);deleted++;
+      }catch(err){failed++;log(`删除失败：${item.relPath}；${err?.message||err}`)}
+      finally{if((i+1)%15===0||i===candidates.length-1)setProgress(i+1,candidates.length,`复核并删除：${i+1} / ${candidates.length}`);if((i+1)%40===0)await sleep(0)}
+    }
+    alert(`处理完成。\n\n成功删除：${deleted} 张\n文件已变化而跳过：${changed} 张\n复核不通过而跳过：${rejected} 张\n删除失败：${failed} 张`);$('status').textContent=`完成：删除 ${deleted} 张，安全跳过 ${changed+rejected} 张，失败 ${failed} 张`;
+  }finally{
+    deleting=false;$('pickBtn').disabled=false;$('scanBtn').disabled=false;setConfigDisabled(false);hideProgress();scanValid=false;render();await scan();
+  }
+}
+
+$('pickBtn').addEventListener('click',pickDirectory);$('scanBtn').addEventListener('click',scan);$('csvBtn').addEventListener('click',exportCandidates);$('anomalyCsvBtn').addEventListener('click',exportAnomalies);$('deleteBtn').addEventListener('click',deleteCandidates);
+$('previewLimit').addEventListener('change',render);$('viewMode').addEventListener('change',render);$('recursive').addEventListener('change',invalidateScan);
+})();
+</script>
+</body>
+</html>

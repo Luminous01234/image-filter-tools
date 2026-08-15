@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>图片批量重命名 · 安全增强版</title>
+<style>
+:root{--bg:#151515;--panel:#1f1f1f;--panel2:#191919;--line:#3a3a3a;--text:#f2f2f2;--muted:#a9a9a9;--accent:#ff4a2f;--ok:#66e06f;--warn:#ffca5c;--danger:#ff5d5d;--blue:#8ecbff}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}.app{width:min(1280px,calc(100% - 32px));margin:28px auto 60px}h1{font-size:30px;margin:0 0 8px}.sub{color:var(--muted);margin-bottom:22px;line-height:1.7}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px}.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:0 0 12px}.toolbar>div{min-width:180px}.toolbar .spacer{flex:1;min-width:0}label{display:block;font-size:13px;color:#cfcfcf;margin-bottom:7px}.required::after{content:" *";color:var(--danger)}input,select{width:100%;border:1px solid #444;background:#171717;color:var(--text);border-radius:9px;padding:11px 12px;outline:none;font-size:15px}input:focus,select:focus{border-color:#777}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;align-items:center}button{border:0;border-radius:9px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;background:#343434;color:#fff}button:hover{filter:brightness(1.12)}button.primary{background:var(--accent)}button.success{background:#2b8733}button.danger{background:#8e3434}button.warning{background:#82611f}button:disabled{opacity:.42;cursor:not-allowed}.status{margin-left:auto;color:var(--muted);font-size:13px;max-width:48%;text-align:right;word-break:break-all}.template{padding:12px 14px;background:#171717;border:1px dashed #4b4b4b;border-radius:9px;margin-top:14px;color:#d9d9d9;word-break:break-all}.template b{color:var(--accent)}.summary{display:flex;gap:10px;flex-wrap:wrap;color:#cfcfcf;font-size:14px;margin-bottom:12px}.summary span{background:var(--panel2);border:1px solid #303030;border-radius:8px;padding:7px 10px}.summary span b{color:#fff;margin-left:4px}.table-wrap{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:58vh}table{width:100%;border-collapse:collapse;min-width:1080px;background:#181818}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #303030;font-size:13px;vertical-align:middle}th{position:sticky;top:0;z-index:2;background:#292929;color:#efefef}td.old{color:#aaa}td.new{font-weight:700}.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#343434;font-size:12px;white-space:nowrap}.landscape{color:var(--blue)}.portrait{color:#ffb1d8}.ok{color:var(--ok)}.warn{color:var(--warn)}.muted{color:#999}.excluded{color:#777}.note{color:#aaa;font-size:13px;line-height:1.7;margin-top:12px}.notice{display:none;margin-top:12px;padding:12px 14px;border-radius:9px;background:#251b1b;border:1px solid #593535;color:#ffd0d0;font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:240px;overflow:auto}.transaction{display:none;margin-top:12px;padding:14px;border-radius:10px;background:#29220f;border:1px solid #725a22}.transaction-title{font-weight:800;color:#ffe19a;margin-bottom:7px}.transaction-text{font-size:13px;color:#e5d6ad;line-height:1.7}.transaction-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.empty{color:#888;text-align:center;padding:40px 12px}.preview-limit{color:#888;font-size:12px;margin-top:10px}.busy{opacity:.78}.busy button,.busy input,.busy select{pointer-events:none}.progress{display:none;margin-top:12px}.progress-bar{height:8px;background:#292929;border-radius:99px;overflow:hidden}.progress-fill{height:100%;width:0%;background:var(--accent);transition:width .15s}.progress-text{font-size:12px;color:#aaa;margin-top:7px}.check{width:18px;height:18px;accent-color:var(--accent);vertical-align:middle}.small{font-size:12px;color:#888}.mode{padding:5px 9px;border-radius:999px;background:#171717;border:1px solid #333;color:#aaa;font-size:12px}
+@media(max-width:800px){.grid,.options{grid-template-columns:1fr}.status{width:100%;max-width:none;margin-left:0;text-align:left}.toolbar>div{min-width:100%;}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <h1>图片批量重命名</h1>
+  <div class="sub">单 HTML 优化版：选择文件夹后自动识别横/竖屏并生成预览。命名格式为 <b>类别-分数-[可选TAG]-横屏/竖屏-编号</b>；TAG 为空会自动跳过，TAG 内的 “-” 自动规范成 “+”。</div>
+
+  <div class="panel">
+    <div class="grid">
+      <div><label class="required" for="category">类别</label><input id="category" placeholder="例如：日系清新"></div>
+      <div><label class="required" for="score">分数</label><select id="score"><option value="">请选择</option><option value="3">3</option><option value="3.5">3.5</option><option value="4">4</option></select></div>
+      <div><label for="tag">TAG（可选）</label><input id="tag" placeholder="例如：自然光；多个标签可用 +"></div>
+    </div>
+    <div class="options">
+      <div><label for="startNo">起始编号</label><input id="startNo" type="number" value="1" min="0" step="1"></div>
+      <div><label for="digits">编号位数</label><select id="digits"><option value="auto" selected>自动</option><option value="0">不补零</option><option value="2">2 位</option><option value="3">3 位</option><option value="4">4 位</option><option value="5">5 位</option><option value="6">6 位</option></select></div>
+      <div><label for="sortMode">编号顺序</label><select id="sortMode"><option value="orientation" selected>横屏在前，竖屏在后</option><option value="name">按原文件名排序</option><option value="folder">按文件夹读取顺序（不推荐）</option></select></div>
+      <div><label for="separator">分隔符</label><select id="separator"><option value="-" selected>-</option><option value="_">_</option><option value=" ">空格</option></select></div>
+    </div>
+    <div class="template">命名预览：<b id="template">类别-分数-[TAG]-横屏/竖屏-编号</b></div>
+    <div class="actions">
+      <button id="pickBtn" class="primary">① 选择图片文件夹</button>
+      <button id="refreshBtn" disabled>② 重新扫描</button>
+      <button id="exportPreviewBtn" disabled>导出预览 CSV</button>
+      <button id="renameBtn" class="success" disabled>③ 执行重命名</button>
+      <button id="undoBtn" class="danger" disabled>撤销上一次重命名</button>
+      <span class="mode" id="operationMode">文件操作：自动检测</span>
+      <span class="status" id="status">尚未选择文件夹</span>
+    </div>
+    <div class="progress" id="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div><div class="progress-text" id="progressText"></div></div>
+    <div class="transaction" id="transactionPanel">
+      <div class="transaction-title">检测到未完成的文件操作</div>
+      <div class="transaction-text" id="transactionText"></div>
+      <div class="transaction-actions">
+        <button id="continueInterruptedBtn" class="warning">继续上次任务</button>
+        <button id="recoverInterruptedBtn" class="danger">恢复到操作前</button>
+      </div>
+    </div>
+    <div class="note">正方形按横屏处理；只处理当前文件夹第一层图片。扫描优先读取 JPG/PNG/GIF/BMP/WebP 文件头获取尺寸；JPG 会同时读取 EXIF 方向，失败时再完整解码；AVIF 自动使用浏览器解码。这里的“尺寸读取失败”仅表示无法取得图片尺寸，不等同于完整图片损坏检测。浏览器支持原生 <code>move()</code> 时会自动使用快速重命名，不支持时回退到安全复制模式。原文件扩展名大小写会保留。</div>
+    <div class="notice" id="notice"></div>
+  </div>
+
+  <div class="panel">
+    <div class="summary">
+      <span>图片 <b id="countAll">0</b></span><span>横屏 <b id="countLandscape">0</b></span><span>竖屏 <b id="countPortrait">0</b></span><span>尺寸读取失败 <b id="countErrors">0</b></span><span>冲突 <b id="countConflicts">0</b></span><span>无需修改 <b id="countUnchanged">0</b></span><span>已排除 <b id="countExcluded">0</b></span><span>待重命名 <b id="countPending">0</b></span>
+    </div>
+    <div class="toolbar">
+      <div><label for="statusFilter">显示筛选</label><select id="statusFilter"><option value="all">全部</option><option value="pending">只看待重命名</option><option value="conflict">只看命名冲突</option><option value="readerror">只看尺寸读取失败</option><option value="unchanged">只看无需修改</option><option value="excluded">只看已排除</option></select></div>
+      <div class="spacer"></div><div class="small">取消“参与”后，该图片不会占用编号，也不会被重命名。</div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th style="width:60px">参与</th><th style="width:50px">#</th><th>原文件名</th><th style="width:120px">尺寸</th><th style="width:90px">方向</th><th>新文件名</th><th style="width:110px">状态</th></tr></thead><tbody id="tbody"><tr><td colspan="7" class="empty">请选择图片文件夹</td></tr></tbody></table></div>
+    <div class="preview-limit" id="previewLimit"></div>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const IMAGE_EXT = new Set(['jpg','jpeg','png','webp','gif','bmp','avif']);
+const TEMP_PREFIX = '.__img_rename_tmp_';
+const MANIFEST_NAME = '.image_renamer_last.json';
+const TX_NAME = '.image_renamer_transaction.json';
+const TX_PROGRESS_NAME = '.image_renamer_transaction_progress.json';
+const CSV_PREFIX = 'rename_map_';
+const PREVIEW_PREFIX = 'rename_preview_';
+const SETTINGS_KEY = 'image_renamer_settings_v2';
+const PREVIEW_LIMIT = 300;
+const HEADER_READ_BYTES = 512 * 1024;
+let dirHandle = null;
+let items = [];
+let readErrors = [];
+let existingNamesMap = new Map();
+let rebuildTimer = null;
+let running = false;
+let currentTransaction = null;
+let nativeMoveSupport = null;
+let numberingError = '';
+let scanSafetyError = '';
+
+function sanitizePart(value){return String(value??'').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').replace(/^-+|-+$/g,'').trim();}
+function normalizeTag(value){return sanitizePart(value).replace(/\s*-+\s*/g,'+').replace(/\++/g,'+').replace(/^\+|\+$/g,'').trim();}
+function extOf(name){const i=name.lastIndexOf('.');return i>=0?name.slice(i+1).toLowerCase():'';}
+function baseExt(name){const i=name.lastIndexOf('.');return i<0?{base:name,ext:''}:{base:name.slice(0,i),ext:name.slice(i)};}
+function orientationFor(w,h){return w>=h?'横屏':'竖屏';}
+function naturalCompare(a,b){return a.localeCompare(b,'zh-CN',{numeric:true,sensitivity:'base'});}
+function resolvedDigits(count){const v=$('digits').value;if(v!=='auto')return Number(v)||0;const start=Math.max(0,parseInt($('startNo').value||'1',10));const highest=Math.max(0,start+Math.max(0,count)-1);return Math.max(1,String(highest).length);}
+function digitCapacityError(count){const v=$('digits').value;if(v==='auto'||count<=0)return '';const d=Number(v)||0;if(d<=0)return '';const start=Math.max(0,parseInt($('startNo').value||'1',10));const highest=start+count-1;const max=Math.pow(10,d)-1;return highest>max?`编号位数不足：当前 ${count} 张参与图片，起始编号 ${start}，最高编号 ${highest}；${d} 位编号最大只能到 ${max}，请改为至少 ${String(highest).length} 位或选择“自动”。`:'';}
+function formatNo(n,d){return d?String(n).padStart(d,'0'):String(n);}
+function composeName(orientation,no,extension,digits){const sep=$('separator').value;const parts=[sanitizePart($('category').value),sanitizePart($('score').value)];const tag=normalizeTag($('tag').value);if(tag)parts.push(tag);parts.push(orientation,formatNo(no,digits));return parts.join(sep)+extension;}
+function updateTemplate(){const sep=$('separator').value;const parts=[sanitizePart($('category').value)||'类别',sanitizePart($('score').value)||'分数'];const tag=normalizeTag($('tag').value);parts.push(tag||'[TAG可选]','横屏/竖屏','编号');$('template').textContent=parts.join(sep);}
+function isCandidateName(name){if(name.startsWith(TEMP_PREFIX))return false;return IMAGE_EXT.has(extOf(name));}
+function setBusy(value,text=''){running=value;$('app').classList.toggle('busy',value);if(text)$('status').textContent=text;}
+function showNotice(lines){const el=$('notice');if(!lines||!lines.length){el.style.display='none';el.textContent='';return;}el.style.display='block';el.textContent=lines.join('\n');}
+function setProgress(current,total,text=''){const p=$('progress');if(total<=0){p.style.display='none';return;}p.style.display='block';const percent=Math.max(0,Math.min(100,Math.round(current/total*100)));$('progressFill').style.width=percent+'%';$('progressText').textContent=text||`${current}/${total}（${percent}%）`;}
+function hideProgress(){setTimeout(()=>{$('progress').style.display='none';$('progressFill').style.width='0%';$('progressText').textContent='';},300);}
+function timestamp(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;}
+function csvEscape(v){const s=String(v??'');return /[",\n\r]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;}
+function getSettings(){const out={};for(const id of ['category','score','tag','startNo','digits','sortMode','separator','statusFilter'])out[id]=$(id).value;return out;}
+function saveSettings(){try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(getSettings()));}catch(_){} }
+function loadSettings(){try{const raw=localStorage.getItem(SETTINGS_KEY);if(!raw)return;const data=JSON.parse(raw);for(const [id,value] of Object.entries(data)){if($(id)&&value!==undefined&&value!==null)$(id).value=String(value);}}catch(_){} }
+
+function parseExifOrientation(u,v,dataStart,dataLength){
+  try{
+    if(dataLength<14)return 1;
+    const sig=String.fromCharCode(...u.slice(dataStart,dataStart+6));
+    if(sig!=='Exif\0\0')return 1;
+    const tiff=dataStart+6;if(tiff+8>u.length)return 1;
+    const order=String.fromCharCode(u[tiff],u[tiff+1]);
+    const little=order==='II';if(!little&&order!=='MM')return 1;
+    const get16=off=>v.getUint16(off,little),get32=off=>v.getUint32(off,little);
+    if(get16(tiff+2)!==0x2a)return 1;
+    const ifd0=tiff+get32(tiff+4);if(ifd0+2>u.length)return 1;
+    const count=get16(ifd0);for(let i=0;i<count;i++){
+      const e=ifd0+2+i*12;if(e+12>u.length)return 1;
+      if(get16(e)!==0x0112)continue;
+      const type=get16(e+2),n=get32(e+4);if(type!==3||n<1)return 1;
+      const val=get16(e+8);return val>=1&&val<=8?val:1;
+    }
+  }catch(_){}
+  return 1;
+}
+function parseImageHeader(buffer,ext){
+  const u=new Uint8Array(buffer),v=new DataView(buffer);ext=String(ext||'').toLowerCase();
+  const ascii=(off,len)=>String.fromCharCode(...u.slice(off,off+len));
+  const u24le=off=>u[off]|(u[off+1]<<8)|(u[off+2]<<16);
+  if(ext==='png'&&u.length>=24&&u[0]===0x89&&ascii(1,3)==='PNG')return {width:v.getUint32(16,false),height:v.getUint32(20,false),method:'header'};
+  if(ext==='gif'&&u.length>=10&&ascii(0,3)==='GIF')return {width:v.getUint16(6,true),height:v.getUint16(8,true),method:'header'};
+  if(ext==='bmp'&&u.length>=26&&u[0]===0x42&&u[1]===0x4d){const dib=v.getUint32(14,true);if(dib===12&&u.length>=22)return {width:v.getUint16(18,true),height:v.getUint16(20,true),method:'header'};return {width:Math.abs(v.getInt32(18,true)),height:Math.abs(v.getInt32(22,true)),method:'header'};}
+  if((ext==='jpg'||ext==='jpeg')&&u.length>=12&&u[0]===0xff&&u[1]===0xd8){
+    let off=2,rawWidth=0,rawHeight=0,exifOrientation=1;const sof=new Set([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf]);
+    while(off+4<=u.length){
+      while(off<u.length&&u[off]!==0xff)off++;while(off<u.length&&u[off]===0xff)off++;if(off>=u.length)break;
+      const marker=u[off++];if(marker===0xd9||marker===0xda)break;if(marker===0x01||(marker>=0xd0&&marker<=0xd7))continue;if(off+1>=u.length)break;
+      const len=v.getUint16(off,false);if(len<2||off+len>u.length)break;const dataStart=off+2,dataLength=len-2;
+      if(marker===0xe1)exifOrientation=parseExifOrientation(u,v,dataStart,dataLength)||exifOrientation;
+      if(sof.has(marker)&&len>=7){rawHeight=v.getUint16(off+3,false);rawWidth=v.getUint16(off+5,false);}
+      off+=len;
+    }
+    if(rawWidth>0&&rawHeight>0){const swap=exifOrientation>=5&&exifOrientation<=8;return {width:swap?rawHeight:rawWidth,height:swap?rawWidth:rawHeight,rawWidth,rawHeight,exifOrientation,method:'header'};}
+  }
+  if(ext==='webp'&&u.length>=30&&ascii(0,4)==='RIFF'&&ascii(8,4)==='WEBP'){const kind=ascii(12,4);if(kind==='VP8X')return {width:1+u24le(24),height:1+u24le(27),method:'header'};if(kind==='VP8L'&&u[20]===0x2f&&u.length>=25){const b1=u[21],b2=u[22],b3=u[23],b4=u[24];return {width:1+(((b2&0x3f)<<8)|b1),height:1+(((b4&0x0f)<<10)|(b3<<2)|((b2&0xc0)>>6)),method:'header'};}if(kind==='VP8 '&&u.length>=30&&u[23]===0x9d&&u[24]===0x01&&u[25]===0x2a)return {width:v.getUint16(26,true)&0x3fff,height:v.getUint16(28,true)&0x3fff,method:'header'};}
+  return null;
+}
+
+async function decodeImageSize(file){if('createImageBitmap' in window){try{const bmp=await createImageBitmap(file);const out={width:bmp.width,height:bmp.height,method:'decode'};bmp.close?.();return out;}catch(_){} }return new Promise((resolve,reject)=>{const url=URL.createObjectURL(file);const img=new Image();img.onload=()=>{const out={width:img.naturalWidth,height:img.naturalHeight,method:'decode'};URL.revokeObjectURL(url);resolve(out);};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('无法读取图片尺寸或浏览器不支持该格式'));};img.src=url;});}
+async function getImageSize(file){try{const head=await file.slice(0,Math.min(file.size,HEADER_READ_BYTES)).arrayBuffer();const fast=parseImageHeader(head,extOf(file.name));if(fast&&fast.width>0&&fast.height>0)return fast;}catch(_){}return decodeImageSize(file);}
+
+function sortedItems(source){const arr=[...source];const mode=$('sortMode').value;if(mode==='orientation'){arr.sort((a,b)=>{const oa=a.orientation==='横屏'?0:1,ob=b.orientation==='横屏'?0:1;if(oa!==ob)return oa-ob;return naturalCompare(a.originalName,b.originalName);});}else if(mode==='name'){arr.sort((a,b)=>naturalCompare(a.originalName,b.originalName));}else{arr.sort((a,b)=>a.folderOrder-b.folderOrder);}return arr;}
+async function rebuildNamesOnly(){
+  updateTemplate();
+  if(!items.length){render();return;}
+  const ordered=sortedItems(items),active=ordered.filter(x=>!x.excluded),start=Math.max(0,parseInt($('startNo').value||'1',10)),d=resolvedDigits(active.length),targetMap=new Map();numberingError=digitCapacityError(active.length);let seq=0;
+  for(const item of ordered){
+    item.warning='';
+    if(item.excluded){item.number=null;item.newName='';item.status='excluded';continue;}
+    item.number=start+seq++;item.newName=composeName(item.orientation,item.number,baseExt(item.originalName).ext,d);item.status=item.originalName===item.newName?'unchanged':'pending';
+    if(new TextEncoder().encode(item.newName).length>255){item.warning='文件名超过255字节';item.status='conflict';}
+    const key=item.newName.toLocaleLowerCase();if(targetMap.has(key)){item.warning='目标名重复';item.status='conflict';const other=targetMap.get(key);other.warning='目标名重复';other.status='conflict';}else targetMap.set(key,item);
+  }
+  const movableSources=new Set(active.map(x=>x.originalName.toLocaleLowerCase()));
+  for(const item of active){if(item.status==='unchanged')continue;const key=item.newName.toLocaleLowerCase();if(existingNamesMap.has(key)&&!movableSources.has(key)){item.warning=`目标名已被占用：${existingNamesMap.get(key)}`;item.status='conflict';}}
+  items=ordered;render();
+}
+function toggleExclude(item,participates){item.excluded=!participates;rebuildNamesOnly().catch(e=>showNotice([e?.message||String(e)]));}
+function filteredItems(){const f=$('statusFilter').value;if(f==='all')return items;return items.filter(x=>x.status===f);}
+function render(){
+  const tbody=$('tbody');tbody.innerHTML='';const filter=$('statusFilter').value,visibleErrors=filter==='readerror'?readErrors:null,visible=filter==='readerror'?[]:filteredItems();
+  if(visibleErrors){if(!visibleErrors.length){tbody.innerHTML='<tr><td colspan="7" class="empty">没有尺寸读取失败的图片</td></tr>';}else{visibleErrors.slice(0,PREVIEW_LIMIT).forEach((er,i)=>{const tr=document.createElement('tr');tr.innerHTML='<td>—</td><td></td><td class="old"></td><td>—</td><td>—</td><td>—</td><td><span class="badge warn">尺寸读取失败</span></td>';tr.children[1].textContent=String(i+1);tr.children[2].textContent=er.name;tr.title=er.error;tbody.appendChild(tr);});}}
+  else if(!items.length){tbody.innerHTML='<tr><td colspan="7" class="empty">当前没有可预览图片</td></tr>';}else if(!visible.length){tbody.innerHTML='<tr><td colspan="7" class="empty">当前筛选条件下没有图片</td></tr>';}else{
+    visible.slice(0,PREVIEW_LIMIT).forEach((it,i)=>{const tr=document.createElement('tr');const tdCheck=document.createElement('td'),check=document.createElement('input');check.type='checkbox';check.className='check';check.checked=!it.excluded;check.title='是否参与编号和重命名';check.addEventListener('change',()=>toggleExclude(it,check.checked));tdCheck.appendChild(check);tr.appendChild(tdCheck);
+      const tdNo=document.createElement('td');tdNo.textContent=it.number??'—';tr.appendChild(tdNo);const tdOld=document.createElement('td');tdOld.className='old';tdOld.textContent=it.originalName;tr.appendChild(tdOld);const tdSize=document.createElement('td');tdSize.textContent=`${it.width}×${it.height}`;tr.appendChild(tdSize);const tdOri=document.createElement('td');tdOri.innerHTML=`<span class="badge ${it.orientation==='横屏'?'landscape':'portrait'}">${it.orientation}</span>`;tr.appendChild(tdOri);const tdNew=document.createElement('td');tdNew.className='new';tdNew.textContent=it.newName||'—';tr.appendChild(tdNew);const tdState=document.createElement('td');tdState.innerHTML=it.status==='pending'?'<span class="badge ok">待重命名</span>':it.status==='unchanged'?'<span class="badge muted">无需修改</span>':it.status==='excluded'?'<span class="badge excluded">已排除</span>':'<span class="badge warn">需检查</span>';tr.appendChild(tdState);tbody.appendChild(tr);});
+  }
+  const landscape=items.filter(x=>x.orientation==='横屏').length,portrait=items.filter(x=>x.orientation==='竖屏').length,conflicts=items.filter(x=>x.status==='conflict').length,unchanged=items.filter(x=>x.status==='unchanged').length,excluded=items.filter(x=>x.status==='excluded').length,pending=items.filter(x=>x.status==='pending').length;
+  $('countAll').textContent=items.length;$('countLandscape').textContent=landscape;$('countPortrait').textContent=portrait;$('countErrors').textContent=readErrors.length;$('countConflicts').textContent=conflicts;$('countUnchanged').textContent=unchanged;$('countExcluded').textContent=excluded;$('countPending').textContent=pending;
+  const visibleCount=visibleErrors?visibleErrors.length:visible.length;$('previewLimit').textContent=visibleCount>PREVIEW_LIMIT?`当前筛选共 ${visibleCount} 条，为保证流畅只显示前 ${PREVIEW_LIMIT} 条；统计和实际执行仍覆盖全部。`:'';
+  const validRequired=!!sanitizePart($('category').value)&&!!sanitizePart($('score').value),blocked=!!currentTransaction||!!scanSafetyError||!!numberingError;
+  $('renameBtn').disabled=!dirHandle||!pending||readErrors.length>0||conflicts>0||!validRequired||running||blocked;$('exportPreviewBtn').disabled=!dirHandle||!items.length||!validRequired||running||blocked;
+  const lines=[];if(scanSafetyError)lines.push('安全检查：'+scanSafetyError);if(numberingError){if(lines.length)lines.push('');lines.push(numberingError);}if(readErrors.length){lines.push(`尺寸读取失败 ${readErrors.length} 张（存在尺寸读取失败时禁止执行）：`);readErrors.slice(0,30).forEach(x=>lines.push(`• ${x.name} — ${x.error}`));if(readErrors.length>30)lines.push('…');}const bad=items.filter(x=>x.warning);if(bad.length){if(lines.length)lines.push('');lines.push(`命名冲突/异常 ${bad.length} 项：`);bad.slice(0,30).forEach(x=>lines.push(`• ${x.originalName} → ${x.newName} — ${x.warning}`));if(bad.length>30)lines.push('…');}showNotice(lines);
+}
+
+async function writeTextFile(name,text){const h=await dirHandle.getFileHandle(name,{create:true});const w=await h.createWritable();await w.write(text);await w.close();}
+async function readTextFile(name){const h=await dirHandle.getFileHandle(name);const f=await h.getFile();return await f.text();}
+async function removeIfExists(name){try{await dirHandle.removeEntry(name);}catch(e){if(e.name!=='NotFoundError')throw e;}}
+async function exists(name){try{await dirHandle.getFileHandle(name);return true;}catch(e){if(e.name==='NotFoundError')return false;throw e;}}
+async function copyFileTo(name,file){const target=await dirHandle.getFileHandle(name,{create:true});const writable=await target.createWritable();await writable.write(file);await writable.close();}
+function makeTempName(index,ext){return `${TEMP_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2)}_${index}${ext}`;}
+async function moveOrCopy(fromName,toName){
+  const source=await dirHandle.getFileHandle(fromName);
+  if(typeof source.move==='function'&&nativeMoveSupport!==false){
+    try{await source.move(toName);nativeMoveSupport=true;$('operationMode').textContent='文件操作：原生 move 快速模式';return 'move';}
+    catch(err){const fromExists=await exists(fromName),toExists=await exists(toName);if(!fromExists&&toExists){nativeMoveSupport=true;$('operationMode').textContent='文件操作：原生 move 快速模式';return 'move';}if(!fromExists||toExists)throw err;nativeMoveSupport=false;$('operationMode').textContent='文件操作：安全复制兼容模式';}
+  }
+  const fallbackSource=await dirHandle.getFileHandle(fromName),file=await fallbackSource.getFile();await copyFileTo(toName,file);await dirHandle.removeEntry(fromName);if(nativeMoveSupport===null)nativeMoveSupport=false;$('operationMode').textContent='文件操作：安全复制兼容模式';return 'copy';
+}
+async function verifyPermission(){if(!dirHandle)return false;const opts={mode:'readwrite'};if(typeof dirHandle.queryPermission==='function'&&(await dirHandle.queryPermission(opts))==='granted')return true;if(typeof dirHandle.requestPermission==='function')return (await dirHandle.requestPermission(opts))==='granted';return true;}
+
+async function loadManifest(){try{return JSON.parse(await readTextFile(MANIFEST_NAME));}catch(e){return null;}}
+async function loadTransaction(){
+  let raw;
+  try{raw=await readTextFile(TX_NAME);}catch(e){if(e?.name==='NotFoundError')return null;throw new Error('检测到异常事务：无法读取事务记录文件。'+(e?.message||e));}
+  let tx;try{tx=JSON.parse(raw);}catch(e){throw new Error('检测到异常事务：事务记录 JSON 已损坏。请不要开始新的重命名，先备份当前文件夹并检查临时文件。');}
+  if(!tx||!Array.isArray(tx.records)||!['rename','undo','recovery'].includes(tx.operation))throw new Error('检测到异常事务：事务记录结构无效。请不要开始新的重命名。');
+  for(const r of tx.records){if(!r||!r.from_name||!r.to_name||!r.temp_name)throw new Error('检测到异常事务：事务记录缺少必要字段。');if(!r.state)r.state='from';}
+  try{tx._progress=JSON.parse(await readTextFile(TX_PROGRESS_NAME));}catch(e){if(e?.name!=='NotFoundError')tx._progress=null;}
+  return tx;
+}
+async function saveTransactionDefinition(tx){tx.updated_at=new Date().toISOString();const clean={...tx};delete clean._progress;await writeTextFile(TX_NAME,JSON.stringify(clean,null,2));currentTransaction=tx;showTransactionPanel(tx);}
+async function writeTransactionProgress(tx,stage,index,total){const p={operation:tx.operation,stage,index,total,completed:Math.min(total,stage===0?0:stage===1?index:tx.records.length+index),updated_at:new Date().toISOString()};tx._progress=p;await writeTextFile(TX_PROGRESS_NAME,JSON.stringify(p));currentTransaction=tx;showTransactionPanel(tx);}
+function buildTransaction(operation,pairs,extra={}){return {version:2,operation,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),...extra,records:pairs.map((p,i)=>({...p,temp_name:makeTempName(i,baseExt(p.from_name).ext),state:'from'}))};}
+function showTransactionPanel(tx){const panel=$('transactionPanel');if(!tx){panel.style.display='none';$('transactionText').textContent='';return;}panel.style.display='block';const label=tx.operation==='rename'?'批量重命名':tx.operation==='undo'?'撤销重命名':'恢复操作';const total=(tx.records?.length||0)*2,done=tx._progress?.completed??(tx.records||[]).reduce((n,r)=>n+(r.state==='to'?2:r.state==='temp'?1:0),0);$('transactionText').textContent=`上一次“${label}”没有正常结束，共 ${tx.records?.length||0} 项，处理进度约 ${done}/${Math.max(1,total)}。可以继续执行，也可以恢复到该操作开始前的状态。`;$('recoverInterruptedBtn').style.display=tx.operation==='recovery'?'none':'inline-block';$('continueInterruptedBtn').textContent=tx.operation==='recovery'?'继续恢复':'继续上次任务';}
+async function updateUndoAvailability(){if(!dirHandle||currentTransaction){$('undoBtn').disabled=true;return;}const m=await loadManifest();$('undoBtn').disabled=!(m&&Array.isArray(m.records)&&m.records.length);}
+async function directoryExactNames(){const set=new Set();for await(const [name,handle] of dirHandle.entries())if(handle.kind==='file')set.add(name);return set;}
+async function directoryNameMap(){const map=new Map();for await(const [name,handle] of dirHandle.entries())if(handle.kind==='file')map.set(name.toLocaleLowerCase(),name);return map;}
+async function preflightTransaction(tx){const names=await directoryNameMap(),sources=new Set(tx.records.map(r=>r.from_name.toLocaleLowerCase())),seenTo=new Set();for(const rec of tx.records){const fk=rec.from_name.toLocaleLowerCase(),tk=rec.to_name.toLocaleLowerCase();if(!names.has(fk))throw new Error(`找不到源文件：${rec.from_name}`);if(seenTo.has(tk))throw new Error(`目标文件名重复：${rec.to_name}`);seenTo.add(tk);if(names.has(tk)&&!sources.has(tk))throw new Error(`目标文件名已被占用：${names.get(tk)}`);if(await exists(rec.temp_name))throw new Error(`临时文件名已存在：${rec.temp_name}`);}return true;}
+async function reconcileTransaction(tx){
+  let names=await directoryExactNames();
+  for(const rec of tx.records){let f=names.has(rec.from_name),t=names.has(rec.temp_name),o=names.has(rec.to_name);
+    if(f&&!t&&!o){rec.state='from';continue;}
+    if(!f&&t&&!o){rec.state='temp';continue;}
+    if(!f&&!t&&o){rec.state='to';continue;}
+    // 阶段1复制完成但删除源文件前中断：原文件仍是可信源，丢弃临时副本后重做。
+    if(f&&t&&!o){await removeIfExists(rec.temp_name);names.delete(rec.temp_name);rec.state='from';continue;}
+    // 阶段2复制完成但删除临时文件前中断：临时文件是可信源，丢弃目标副本后重做阶段2。
+    if(!f&&t&&o){await removeIfExists(rec.to_name);names.delete(rec.to_name);rec.state='temp';continue;}
+    throw new Error(`无法自动判断中断状态：${rec.from_name} / ${rec.temp_name} / ${rec.to_name}。为避免误覆盖，已停止自动恢复。`);
+  }
+  await saveTransactionDefinition(tx);return tx;
+}
+async function saveRenameResult(tx){const manifest={version:2,created_at:new Date().toISOString(),records:tx.records.map(r=>({original_name:r.from_name,new_name:r.to_name,width:r.width,height:r.height,orientation:r.orientation}))};await writeTextFile(MANIFEST_NAME,JSON.stringify(manifest,null,2));const csvName=`${CSV_PREFIX}${timestamp()}.csv`,lines=['original_name,new_name,width,height,orientation,status'];for(const r of tx.records)lines.push([r.from_name,r.to_name,r.width||'',r.height||'',r.orientation||'','success'].map(csvEscape).join(','));await writeTextFile(csvName,'\uFEFF'+lines.join('\n'));return csvName;}
+async function finalizeTransaction(tx){let message='';if(tx.operation==='rename'){const csvName=await saveRenameResult(tx);message=`重命名完成：${tx.records.length} 张。映射表：${csvName}`;}else if(tx.operation==='undo'){await removeIfExists(MANIFEST_NAME);message=`撤销完成：已恢复 ${tx.records.length} 张图片。`;}else{message=`恢复完成：${tx.records.length} 项已回到操作前状态。`;}await removeIfExists(TX_NAME);await removeIfExists(TX_PROGRESS_NAME);currentTransaction=null;showTransactionPanel(null);return message;}
+async function runTransaction(tx){
+  currentTransaction=tx;const total=Math.max(1,tx.records.length*2);
+  for(let i=0;i<tx.records.length;i++){const rec=tx.records[i];if(rec.state!=='from')continue;await moveOrCopy(rec.from_name,rec.temp_name);rec.state='temp';await writeTransactionProgress(tx,1,i+1,total);setProgress(i+1,total,`阶段 1/2：${i+1}/${tx.records.length}`);}
+  for(let i=0;i<tx.records.length;i++){const rec=tx.records[i];if(rec.state==='to')continue;if(rec.state!=='temp')throw new Error(`事务状态异常：${rec.from_name}`);await moveOrCopy(rec.temp_name,rec.to_name);rec.state='to';await writeTransactionProgress(tx,2,i+1,total);setProgress(tx.records.length+i+1,total,`阶段 2/2：${i+1}/${tx.records.length}`);}
+  return finalizeTransaction(tx);
+}
+async function startTransaction(tx){await preflightTransaction(tx);await saveTransactionDefinition(tx);await writeTransactionProgress(tx,0,0,Math.max(1,tx.records.length*2));return runTransaction(tx);}
+async function continueInterrupted(){if(!dirHandle||running)return;const tx=await loadTransaction();if(!tx)return;setBusy(true,'正在继续未完成任务…');try{await reconcileTransaction(tx);const msg=await runTransaction(tx);alert(msg);await scanDirectory();}catch(err){console.error(err);showNotice(['继续任务失败：'+(err?.message||err)]);alert('继续任务失败：'+(err?.message||err));}finally{setBusy(false);hideProgress();render();}}
+async function recoverInterrupted(){if(!dirHandle||running)return;const tx=await loadTransaction();if(!tx)return;if(tx.operation==='recovery'){return continueInterrupted();}if(!confirm('将恢复到这次操作开始前的文件名状态。\n\n确认继续吗？'))return;setBusy(true,'正在准备恢复…');try{await reconcileTransaction(tx);const pairs=[];for(const rec of tx.records){if(rec.state==='from')continue;const current=rec.state==='temp'?rec.temp_name:rec.to_name;pairs.push({from_name:current,to_name:rec.from_name});}if(!pairs.length){await removeIfExists(TX_NAME);await removeIfExists(TX_PROGRESS_NAME);currentTransaction=null;showTransactionPanel(null);alert('文件已经处于操作前状态。');await scanDirectory();return;}const recovery=buildTransaction('recovery',pairs,{source_operation:tx.operation});const msg=await startTransaction(recovery);alert(msg);await scanDirectory();}catch(err){console.error(err);showNotice(['恢复失败：'+(err?.message||err)]);alert('恢复失败：'+(err?.message||err));}finally{setBusy(false);hideProgress();render();}}
+
+async function scanDirectory(){
+  if(!dirHandle)return;setBusy(true,'正在扫描图片…');$('renameBtn').disabled=true;readErrors=[];items=[];existingNamesMap=new Map();numberingError='';scanSafetyError='';const candidates=[],tempFiles=[];const started=performance.now();
+  try{
+    let order=0;for await(const [name,handle] of dirHandle.entries()){if(handle.kind!=='file')continue;existingNamesMap.set(name.toLocaleLowerCase(),name);if(name.startsWith(TEMP_PREFIX))tempFiles.push(name);if(isCandidateName(name))candidates.push({name,handle,folderOrder:order++});}
+    currentTransaction=await loadTransaction();if(!currentTransaction&&tempFiles.length){scanSafetyError=`检测到 ${tempFiles.length} 个孤立临时文件，但没有可用事务记录。为避免误操作，已阻止新的重命名。请先备份文件夹并人工检查这些 ${TEMP_PREFIX} 开头的文件。`;throw new Error(scanSafetyError);}if(currentTransaction){showTransactionPanel(currentTransaction);$('status').textContent='检测到未完成任务，请先继续或恢复';await updateUndoAvailability();return;}showTransactionPanel(null);
+    const concurrency=Math.min(12,Math.max(1,candidates.length)),results=[];let next=0,done=0,headerCount=0;async function worker(){while(true){const idx=next++;if(idx>=candidates.length)return;const c=candidates[idx];try{const file=await c.handle.getFile(),size=await getImageSize(file);if(size.method==='header')headerCount++;results.push({originalName:c.name,handle:c.handle,width:size.width,height:size.height,orientation:orientationFor(size.width,size.height),folderOrder:c.folderOrder,number:null,newName:'',warning:'',status:'pending',excluded:false});}catch(e){readErrors.push({name:c.name,error:e?.message||String(e)});}done++;const elapsed=Math.max(.001,(performance.now()-started)/1000),rate=Math.round(done/elapsed);setProgress(done,candidates.length,`正在读取尺寸：${done}/${candidates.length}｜约 ${rate} 张/秒`);}}
+    await Promise.all(Array.from({length:concurrency},()=>worker()));items=results.sort((a,b)=>a.folderOrder-b.folderOrder);readErrors.sort((a,b)=>naturalCompare(a.name,b.name));await rebuildNamesOnly();const elapsed=Math.max(.001,(performance.now()-started)/1000),rate=Math.round(candidates.length/elapsed);$('status').textContent=`扫描完成：${items.length} 张｜${elapsed.toFixed(1)} 秒｜约 ${rate} 张/秒｜文件头快速读取 ${headerCount} 张`;await updateUndoAvailability();
+  }catch(err){console.error(err);scanSafetyError=err?.message||String(err);showNotice(['安全扫描已停止：'+scanSafetyError]);$('status').textContent='扫描已阻止，请检查提示';}finally{setBusy(false);hideProgress();render();}
+}
+async function pickDirectory(){if(!('showDirectoryPicker' in window)){alert('当前浏览器不支持直接选择并修改本地文件夹。\n\n请在 Mac 上使用最新版 Google Chrome 或 Microsoft Edge 打开此 HTML。Safari / Firefox 可能无法使用该功能。');return;}try{dirHandle=await window.showDirectoryPicker({mode:'readwrite'});$('status').textContent=`已选择：${dirHandle.name}`;$('refreshBtn').disabled=false;await scanDirectory();}catch(err){if(err?.name!=='AbortError'){console.error(err);alert('选择文件夹失败：'+(err?.message||err));}}}
+
+async function exportPreview(){if(!dirHandle||!items.length||running)return;if(!sanitizePart($('category').value)||!sanitizePart($('score').value)){alert('请先填写类别并选择分数。');return;}await rebuildNamesOnly();if(numberingError){alert(numberingError);return;}const name=`${PREVIEW_PREFIX}${timestamp()}.csv`,lines=['participate,original_name,new_name,width,height,orientation,status,warning'];for(const it of items)lines.push([it.excluded?'no':'yes',it.originalName,it.newName,it.width,it.height,it.orientation,it.status,it.warning].map(csvEscape).join(','));await writeTextFile(name,'\uFEFF'+lines.join('\n'));alert(`预览 CSV 已保存到当前图片文件夹：\n${name}`);}
+async function executeRename(){
+  if(!items.length||!dirHandle||running)return;if(!sanitizePart($('category').value)){alert('请填写类别。');return;}if(!sanitizePart($('score').value)){alert('请选择分数。');return;}if(!await verifyPermission()){alert('没有获得文件夹写入权限。');return;}await rebuildNamesOnly();if(numberingError){alert(numberingError);return;}if(scanSafetyError){alert('安全检查未通过：'+scanSafetyError);return;}const pending=items.filter(x=>x.status==='pending');if(readErrors.length||items.some(x=>x.status==='conflict')){alert('存在尺寸读取失败或命名冲突，请处理后再执行。');return;}if(!pending.length){alert('当前没有需要重命名的图片。');return;}if(!confirm(`即将重命名 ${pending.length} 张图片。\n\n执行前会写入可恢复事务记录；浏览器支持原生 move 时自动使用快速模式，否则使用安全复制模式。\n建议重要数据首次使用先对复制文件夹测试。\n\n确认继续吗？`))return;
+  setBusy(true,'正在重命名…');try{const pairs=pending.map(it=>({from_name:it.originalName,to_name:it.newName,width:it.width,height:it.height,orientation:it.orientation})),tx=buildTransaction('rename',pairs);const msg=await startTransaction(tx);alert(msg);await scanDirectory();}catch(err){console.error(err);currentTransaction=await loadTransaction();showTransactionPanel(currentTransaction);if(currentTransaction){$('status').textContent='执行中断，可继续或恢复';showNotice(['重命名过程中发生错误：'+(err?.message||err),'事务记录仍保留，可使用“继续上次任务”或“恢复到操作前”。']);alert('重命名过程中发生错误。事务记录已保留，请选择继续或恢复。');}else{$('status').textContent='执行前检查未通过';showNotice(['无法开始重命名：'+(err?.message||err)]);alert('无法开始重命名：'+(err?.message||err));}}finally{setBusy(false);hideProgress();await updateUndoAvailability();render();}
+}
+async function undoLast(){
+  if(!dirHandle||running)return;if(!await verifyPermission()){alert('没有获得文件夹写入权限。');return;}const manifest=await loadManifest();if(!manifest||!Array.isArray(manifest.records)||!manifest.records.length){alert('当前文件夹没有可撤销的记录。');await updateUndoAvailability();return;}if(!confirm(`将撤销最近一次批量重命名，共 ${manifest.records.length} 张图片。\n\n撤销过程同样会写入中断恢复记录。\n\n确认继续吗？`))return;
+  setBusy(true,'正在撤销…');try{const pairs=manifest.records.map(r=>({from_name:r.new_name,to_name:r.original_name})),tx=buildTransaction('undo',pairs);const msg=await startTransaction(tx);alert(msg);await scanDirectory();}catch(err){console.error(err);currentTransaction=await loadTransaction();showTransactionPanel(currentTransaction);if(currentTransaction){$('status').textContent='撤销中断，可继续或恢复';showNotice(['撤销过程中发生错误：'+(err?.message||err),'事务记录仍保留，可继续撤销或恢复到撤销开始前。']);alert('撤销过程中发生错误。事务记录已保留，请选择继续或恢复。');}else{$('status').textContent='撤销前检查未通过';showNotice(['无法开始撤销：'+(err?.message||err)]);alert('无法开始撤销：'+(err?.message||err));}}finally{setBusy(false);hideProgress();await updateUndoAvailability();render();}
+}
+
+function scheduleRebuild(){updateTemplate();saveSettings();clearTimeout(rebuildTimer);rebuildTimer=setTimeout(()=>{rebuildNamesOnly().catch(e=>showNotice([e?.message||String(e)]));},120);}
+$('pickBtn').addEventListener('click',pickDirectory);$('refreshBtn').addEventListener('click',scanDirectory);$('exportPreviewBtn').addEventListener('click',exportPreview);$('renameBtn').addEventListener('click',executeRename);$('undoBtn').addEventListener('click',undoLast);$('continueInterruptedBtn').addEventListener('click',continueInterrupted);$('recoverInterruptedBtn').addEventListener('click',recoverInterrupted);$('statusFilter').addEventListener('change',()=>{saveSettings();render();});
+['category','score','tag','startNo','digits','sortMode','separator'].forEach(id=>{$(id).addEventListener('input',scheduleRebuild);$(id).addEventListener('change',scheduleRebuild);});
+loadSettings();updateTemplate();render();
+window.__ImageRenamerTest={parseImageHeader,parseExifOrientation,normalizeTag,orientationFor,digitCapacityError,isCandidateName};
+if(!('showDirectoryPicker' in window)){$('status').textContent='请使用最新版 Chrome / Edge 打开此 HTML';showNotice(['当前浏览器没有 File System Access API。Mac 建议使用最新版 Google Chrome 或 Microsoft Edge。']);}
+})();
+</script>
+</body>
+</html>

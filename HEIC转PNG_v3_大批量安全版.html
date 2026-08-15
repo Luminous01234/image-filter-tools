@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HEIC 转 PNG · 大批量安全版 v3</title>
+<style>
+:root{--bg:#f3f5f8;--panel:#fff;--ink:#172033;--muted:#697386;--line:#dfe4ec;--accent:#2864dc;--accent-dark:#1f52bb;--accent-soft:#eef4ff;--success:#16875b;--success-soft:#eaf8f2;--warn:#a26b00;--warn-soft:#fff7df;--danger:#bd3d3d;--danger-soft:#fff0f0;--shadow:0 12px 34px rgba(30,43,68,.08)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei UI",system-ui,sans-serif}button,select{font:inherit}.app{width:min(1160px,calc(100% - 28px));margin:28px auto 36px}.hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-bottom:20px}.hero h1{margin:6px 0 8px;font-size:clamp(34px,5vw,56px);letter-spacing:-.04em;line-height:1}.hero p{max-width:760px;margin:0;color:var(--muted);line-height:1.7}.eyebrow{color:var(--success);font-size:13px;font-weight:750;letter-spacing:.06em}.dot{display:inline-block;width:8px;height:8px;margin-right:8px;border-radius:99px;background:var(--success)}.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}.toolbar{padding:16px;display:flex;flex-wrap:wrap;gap:9px;align-items:center}.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:700}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn.success{background:var(--success);border-color:var(--success);color:#fff}.btn:disabled{opacity:.4;cursor:not-allowed}.mode-pill{margin-left:auto;padding:6px 10px;border-radius:999px;background:#f1f3f6;color:var(--muted);font-size:12px}.drop{margin:0 16px 16px;min-height:170px;border:2px dashed #bcc7d7;border-radius:14px;display:grid;place-items:center;text-align:center;background:#fbfdff;padding:22px;transition:.15s}.drop.drag{border-color:var(--accent);background:var(--accent-soft)}.drop strong{display:block;font-size:18px;margin-bottom:6px}.drop span{color:var(--muted);font-size:13px}.settings{padding:16px;border-top:1px solid var(--line);background:#fafbfc}.settings-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:12px}.setting{padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff}.setting label{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}.setting strong{font-size:14px}.setting select{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff;color:var(--ink)}.hint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px}.notice{margin-top:12px;padding:11px 13px;border-radius:10px;background:#f7f9fc;color:#526070;font-size:12px;line-height:1.65}.stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:16px}.stat{padding:12px;border:1px solid var(--line);border-radius:12px;background:#fcfdff}.stat .k{font-size:11px;color:var(--muted);margin-bottom:5px}.stat .v{font-size:20px;font-weight:800}.stat.ok .v{color:var(--success)}.stat.bad .v{color:var(--danger)}.stat.warn .v{color:var(--warn)}.progress-wrap{padding:0 16px 16px}.progress{height:9px;border-radius:99px;overflow:hidden;background:#e8edf4}.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .12s}.status{margin-top:8px;color:var(--muted);font-size:13px;line-height:1.5}.message{display:none;margin-top:10px;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.55}.message.warn{display:block;background:var(--warn-soft);color:#765000}.message.error{display:block;background:var(--danger-soft);color:#913434}.message.ok{display:block;background:var(--success-soft);color:#106343}.table-head{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}.table-wrap{overflow:auto;max-height:600px}table{width:100%;border-collapse:collapse;min-width:980px;font-size:12px}th,td{padding:9px 10px;border-bottom:1px solid #edf0f4;text-align:left;white-space:nowrap}th{position:sticky;top:0;background:#fafbfc;z-index:1}.path{max-width:360px;overflow:hidden;text-overflow:ellipsis}.badge{display:inline-block;border-radius:999px;padding:3px 8px;background:#eef1f5;color:#66707a}.badge.processing{background:var(--accent-soft);color:var(--accent)}.badge.success{background:var(--success-soft);color:var(--success)}.badge.failed{background:var(--danger-soft);color:var(--danger)}.badge.skipped{background:var(--warn-soft);color:var(--warn)}.empty{text-align:center;padding:40px;color:var(--muted)}footer{text-align:center;color:#8c95a4;font-size:11px;line-height:1.7;padding:3px 0 10px}
+@media(max-width:900px){.settings-grid{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(3,1fr)}.mode-pill{width:100%;margin-left:0}}@media(max-width:560px){.app{width:min(100% - 18px,1160px);margin-top:16px}.hero{flex-direction:column;align-items:flex-start}.settings-grid,.stats{grid-template-columns:1fr 1fr}.toolbar .btn{flex:1 1 46%}}
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="hero">
+    <div>
+      <div class="eyebrow"><span class="dot"></span>本机处理 · 不上传图片</div>
+      <h1>HEIC → PNG <small style="font-size:15px;color:#697386">v3</small></h1>
+      <p>为大批量 HEIC / HEIF 转 PNG 优化：单张串行解码、PNG 尺寸二次校验、页面限量渲染、可调超大图保护。输出采用分批 ZIP；支持目录写入 API 的浏览器还可直接逐张写入文件夹。</p>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="toolbar">
+      <button class="btn primary" id="pickFiles">选择图片</button>
+      <button class="btn" id="pickFolder">选择文件夹</button>
+      <button class="btn" id="pickOutput">选择输出文件夹</button>
+      <button class="btn success" id="start" disabled>开始转换</button>
+      <button class="btn" id="stop" disabled>停止任务</button>
+      <button class="btn" id="downloadErrors" disabled>下载异常 CSV</button>
+      <button class="btn" id="clear" disabled>清空</button>
+      <span class="mode-pill" id="modePill">正在检测浏览器能力…</span>
+      <input id="fileInput" type="file" accept=".heic,.heif,image/heic,image/heif" multiple hidden>
+      <input id="folderInput" type="file" accept=".heic,.heif,image/heic,image/heif" webkitdirectory directory multiple hidden>
+    </div>
+    <div class="drop" id="drop" tabindex="0">
+      <div><strong>拖入 HEIC / HEIF 图片</strong><span>也可以选择整个文件夹；文件夹模式会保留相对目录结构。</span></div>
+    </div>
+    <div class="settings">
+      <div class="settings-grid">
+        <div class="setting"><label>输出模式</label><strong id="outputModeText">自动</strong><div class="hint" id="outputModeHint">Safari 会使用分批 ZIP；支持目录写入 API 的浏览器可直接写盘。</div></div>
+        <div class="setting"><label>ZIP 每批最多</label><select id="batchCount"><option value="50">50 张</option><option value="100" selected>100 张</option><option value="200">200 张</option></select><div class="hint">仅 Safari / ZIP 模式使用。</div></div>
+        <div class="setting"><label>ZIP 每批体积目标</label><select id="batchMB"><option value="100">100 MB</option><option value="200" selected>200 MB</option><option value="400">400 MB</option></select><div class="hint">按生成后的 PNG 实际体积累计；单张 PNG 若更大，会单独成批。</div></div>
+        <div class="setting"><label>超大图安全上限</label><select id="maxMP"><option value="60">60 MP（最稳）</option><option value="80">80 MP</option><option value="120" selected>120 MP</option></select><div class="hint">超过上限直接跳过，不创建全尺寸 Canvas。</div></div>
+        <div class="setting"><label>页面最多显示</label><select id="previewLimit"><option value="200">200 张</option><option value="300" selected>300 张</option><option value="500">500 张</option></select><div class="hint">只影响页面 DOM，不影响实际处理数量。</div></div>
+      </div>
+      <div class="notice"><strong>安全策略：</strong>默认 ≤60MP 正常转换；60MP 以上标记高负载；超过你选择的安全上限直接跳过。PNG 生成后会重新读取 PNG 头部核对宽高。转换会保留视觉方向和像素尺寸，但 Canvas 转码不保证保留 HEIC 的 EXIF、GPS、ICC、HDR、深度图等附加信息。</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="stats">
+      <div class="stat"><div class="k">待处理</div><div class="v" id="countAll">0</div></div>
+      <div class="stat ok"><div class="k">成功</div><div class="v" id="countOk">0</div></div>
+      <div class="stat bad"><div class="k">失败</div><div class="v" id="countFail">0</div></div>
+      <div class="stat warn"><div class="k">跳过</div><div class="v" id="countSkip">0</div></div>
+      <div class="stat"><div class="k">已输出</div><div class="v" id="outBytes">0 B</div></div>
+      <div class="stat"><div class="k">ZIP 批次</div><div class="v" id="zipCount">0</div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress"><i id="bar"></i></div>
+      <div class="status" id="status">尚未添加图片</div>
+      <div class="message" id="message"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="table-head"><strong>处理列表</strong><span id="summary" style="font-size:12px;color:#697386">0 张</span></div>
+    <div class="table-wrap"><table><thead><tr><th>#</th><th>文件</th><th>原大小</th><th>原尺寸</th><th>PNG大小</th><th>状态</th><th>说明</th></tr></thead><tbody id="tbody"><tr><td colspan="7" class="empty">请选择 HEIC / HEIF 图片</td></tr></tbody></table></div>
+  </section>
+
+  <footer>默认使用低内存分批 ZIP；浏览器若提供目录写入能力，也可选择输出文件夹逐张写盘。HEIC 能否解码仍取决于当前浏览器。大量 ZIP 下载时，浏览器可能提示是否允许多个下载。</footer>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const WARN_MP=60;
+const state={items:[],running:false,cancelRequested:false,processed:0,outputRoot:null,mode:'zip',ok:0,fail:0,skip:0,outBytes:0,zipCount:0,errors:[],runId:''};
+
+function formatBytes(n){if(!Number.isFinite(n)||n<=0)return'0 B';const u=['B','KB','MB','GB','TB'];let i=0,v=n;while(v>=1024&&i<u.length-1){v/=1024;i++}return`${v>=100||i===0?v.toFixed(0):v.toFixed(1)} ${u[i]}`}
+function isHeic(f){const n=(f.name||'').toLowerCase();return n.endsWith('.heic')||n.endsWith('.heif')||f.type==='image/heic'||f.type==='image/heif'}
+function relPath(f){return f.webkitRelativePath||f.name}
+function keyFor(f){return `${relPath(f)}::${f.size}::${f.lastModified}`}
+function safeSegment(s){return String(s||'').replace(/[\\:*?"<>|]/g,'_').replace(/^\.+$/,'_')||'_'}
+function splitPath(p){return String(p||'').split('/').filter(Boolean).map(safeSegment)}
+function outputBaseName(name){const base=String(name).replace(/\.[^.]+$/,'')||'image';return safeSegment(base)+'.png'}
+function showMessage(text,type=''){const el=$('message');el.className='message'+(type?` ${type}`:'');el.textContent=text;el.style.display=text?'block':'none'}
+function setProgress(done,total,text){$('bar').style.width=(total?Math.min(100,done/total*100):0).toFixed(1)+'%';$('status').textContent=text}
+function yieldUI(){return new Promise(r=>setTimeout(r,0))}
+function currentCanDirectWrite(){return typeof window.showDirectoryPicker==='function'}
+
+function detectMode(){
+  if(currentCanDirectWrite()){
+    state.mode=state.outputRoot?'folder':'zip';
+    $('pickOutput').disabled=state.running?true:false;
+    $('modePill').textContent=state.outputRoot?'直接写盘模式':'可直接写盘 / 未选输出文件夹';
+    $('outputModeText').textContent=state.outputRoot?'直接写文件夹':'分批 ZIP（可切换写盘）';
+    $('outputModeHint').textContent=state.outputRoot?'逐张写入你选择的文件夹。':'未选择输出文件夹时使用分批 ZIP。';
+  }else{
+    state.mode='zip';state.outputRoot=null;
+    $('pickOutput').disabled=true;
+    $('modePill').textContent='Safari 兼容：分批 ZIP';
+    $('outputModeText').textContent='分批 ZIP';
+    $('outputModeHint').textContent='Safari 不支持 showDirectoryPicker()，因此使用低内存分批 ZIP。';
+  }
+  updateButtons();
+}
+
+function updateStats(){
+  $('countAll').textContent=state.items.length;$('countOk').textContent=state.ok;$('countFail').textContent=state.fail;$('countSkip').textContent=state.skip;$('outBytes').textContent=formatBytes(state.outBytes);$('zipCount').textContent=state.zipCount;
+}
+function updateButtons(){
+  $('pickFiles').disabled=state.running;$('pickFolder').disabled=state.running;$('clear').disabled=state.running||!state.items.length;$('start').disabled=state.running||!state.items.length;$('stop').disabled=!state.running;$('downloadErrors').disabled=state.running||!state.errors.length;
+  if(currentCanDirectWrite())$('pickOutput').disabled=state.running;
+  ['batchCount','batchMB','maxMP','previewLimit'].forEach(id=>$(id).disabled=state.running);
+}
+function render(){
+  updateStats();updateButtons();
+  const limit=Math.max(1,Number($('previewLimit').value||300)),shown=state.items.slice(0,limit);
+  $('summary').textContent=state.items.length+(state.items.length>limit?` 张（显示前 ${limit}）`:' 张');
+  if(!shown.length){$('tbody').innerHTML='<tr><td colspan="7" class="empty">请选择 HEIC / HEIF 图片</td></tr>';return}
+  $('tbody').innerHTML=shown.map((x,i)=>{
+    const cls=x.status==='success'?'success':x.status==='failed'?'failed':x.status==='skipped'?'skipped':x.status==='processing'?'processing':'';
+    const txt={waiting:'等待',processing:'转换中',success:'成功',failed:'失败',skipped:'跳过'}[x.status]||x.status;
+    return `<tr><td>${i+1}</td><td class="path" title="${escapeHtml(x.rel)}">${escapeHtml(x.rel)}</td><td>${formatBytes(x.file.size)}</td><td>${x.width&&x.height?`${x.width}×${x.height}`:'—'}</td><td>${x.pngSize?formatBytes(x.pngSize):'—'}</td><td><span class="badge ${cls}">${txt}</span></td><td>${escapeHtml(x.detail||'')}</td></tr>`
+  }).join('')+(state.items.length>limit?`<tr><td colspan="7" class="empty">其余 ${state.items.length-limit} 张不渲染到页面，但仍会完整处理。</td></tr>`:'');
+}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function addFiles(list){
+  if(state.running)return;
+  const haveFolderKeys=new Set(state.items.filter(x=>x.file.webkitRelativePath).map(x=>x.key));let bad=0;
+  for(const f of [...list]){
+    if(!isHeic(f)){bad++;continue}
+    const hasRel=!!f.webkitRelativePath;
+    const key=hasRel?keyFor(f):`loose:${Date.now()}:${Math.random()}:${f.name}`;
+    if(hasRel&&haveFolderKeys.has(key))continue;
+    if(hasRel)haveFolderKeys.add(key);
+    state.items.push({file:f,key,rel:relPath(f),status:'waiting',detail:'',width:0,height:0,pngSize:0});
+  }
+  state.ok=state.fail=state.skip=state.outBytes=state.zipCount=0;state.errors=[];
+  if(bad)showMessage(`已忽略 ${bad} 个非 HEIC / HEIF 文件。`,'warn');else showMessage('');
+  setProgress(0,state.items.length,`已添加 ${state.items.length} 张图片`);render();
+}
+
+$('pickFiles').onclick=()=>$('fileInput').click();
+$('pickFolder').onclick=()=>$('folderInput').click();
+$('fileInput').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('folderInput').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('clear').onclick=()=>{if(state.running)return;state.items=[];state.ok=state.fail=state.skip=state.outBytes=state.zipCount=0;state.errors=[];setProgress(0,0,'尚未添加图片');showMessage('');render()};
+$('previewLimit').onchange=render;
+
+['dragenter','dragover'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();if(!state.running)$('drop').classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('drag')}));
+$('drop').addEventListener('drop',e=>{if(!state.running)addFiles(e.dataTransfer.files)});
+
+$('pickOutput').onclick=async()=>{
+  if(!currentCanDirectWrite())return;
+  try{state.outputRoot=await window.showDirectoryPicker({mode:'readwrite'});detectMode();showMessage(`输出文件夹：${state.outputRoot.name}`,'ok')}catch(e){if(e?.name!=='AbortError')showMessage('选择输出文件夹失败：'+(e?.message||e),'error')}
+};
+
+function loadImage(file){return new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('当前浏览器无法解码该 HEIC / HEIF'))};img.src=url})}
+function canvasToPng(canvas){return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('PNG 编码失败')),'image/png'))}
+async function parsePngDimensions(blob){
+  const b=await blob.slice(0,24).arrayBuffer();if(b.byteLength<24)throw new Error('PNG 输出头部不完整');const u=new Uint8Array(b),v=new DataView(b);
+  const sig=[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a];for(let i=0;i<8;i++)if(u[i]!==sig[i])throw new Error('PNG 签名校验失败');
+  if(v.getUint32(8,false)!==13||String.fromCharCode(u[12],u[13],u[14],u[15])!=='IHDR')throw new Error('PNG IHDR 校验失败');
+  const w=v.getUint32(16,false),h=v.getUint32(20,false);if(!w||!h)throw new Error('PNG 尺寸无效');return{w,h}
+}
+async function convertOne(item){
+  const img=await loadImage(item.file);let canvas=null;
+  try{
+    const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;if(!w||!h)throw new Error('无法读取像素尺寸');item.width=w;item.height=h;
+    const mp=w*h/1e6,maxMP=Math.max(1,Number($('maxMP').value||120));if(mp>maxMP){const e=new Error(`超大图 ${mp.toFixed(1)}MP，超过 ${maxMP}MP 安全上限`);e.code='TOO_LARGE';throw e}
+    canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+    if(canvas.width!==w||canvas.height!==h)throw new Error('浏览器无法创建目标尺寸 Canvas');
+    const ctx=canvas.getContext('2d',{alpha:true});if(!ctx)throw new Error('无法创建 2D Canvas，上限可能已超出');
+    ctx.drawImage(img,0,0,w,h);
+    const blob=await canvasToPng(canvas);if(!blob.size)throw new Error('PNG 输出为空');
+    const chk=await parsePngDimensions(blob);if(chk.w!==w||chk.h!==h)throw new Error(`尺寸校验失败：原图 ${w}×${h}，PNG ${chk.w}×${chk.h}`);
+    return{blob,w,h,mp,warn:mp>WARN_MP};
+  }finally{if(canvas){canvas.width=1;canvas.height=1}img.src=''}
+}
+
+async function ensureDir(root,parts){let d=root;for(const p of parts){d=await d.getDirectoryHandle(safeSegment(p),{create:true})}return d}
+async function writeBlob(dir,name,blob){const fh=await dir.getFileHandle(name,{create:true}),w=await fh.createWritable();try{await w.write(blob)}finally{await w.close()}}
+function uniquePath(parts,name,used){let n=1,final=name,rel=[...parts,final].join('/');while(used.has(rel)){n++;final=name.replace(/\.png$/i,` (${n}).png`);rel=[...parts,final].join('/')}used.add(rel);return final}
+function makeOutputPath(item,used){const parts=splitPath(item.rel),orig=parts.pop()||item.file.name,name=uniquePath(parts,outputBaseName(orig),used);return{parts,name,rel:[...parts,name].join('/')}}
+function ts(){const d=new Date(),p=n=>String(n).padStart(2,'0'),ms=String(d.getMilliseconds()).padStart(3,'0');return`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}_${ms}`}
+
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+async function crc32Blob(blob){let crc=0xffffffff;const step=4*1024*1024;for(let p=0;p<blob.size;p+=step){const a=new Uint8Array(await blob.slice(p,Math.min(blob.size,p+step)).arrayBuffer());for(const b of a)crc=CRC_TABLE[(crc^b)&255]^(crc>>>8);await yieldUI()}return(crc^0xffffffff)>>>0}
+function le16(n){return new Uint8Array([n&255,(n>>>8)&255])}
+function le32(n){return new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255])}
+function joinBytes(parts){const len=parts.reduce((s,a)=>s+a.length,0),out=new Uint8Array(len);let p=0;for(const a of parts){out.set(a,p);p+=a.length}return out}
+function dosDateTime(d=new Date()){let year=Math.max(1980,d.getFullYear());const date=((year-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),time=(d.getHours()<<11)|(d.getMinutes()<<5)|Math.floor(d.getSeconds()/2);return{date,time}}
+async function buildZip(entries){
+  const enc=new TextEncoder(),parts=[],central=[];let offset=0;const dt=dosDateTime();
+  for(const e of entries){
+    if(e.blob.size>=0xffffffff)throw new Error('单个 PNG 超过传统 ZIP 4GB 上限');
+    const name=enc.encode(e.path),crc=await crc32Blob(e.blob),flag=0x0800;
+    const local=joinBytes([new Uint8Array([0x50,0x4b,0x03,0x04]),le16(20),le16(flag),le16(0),le16(dt.time),le16(dt.date),le32(crc),le32(e.blob.size),le32(e.blob.size),le16(name.length),le16(0),name]);
+    parts.push(local,e.blob);
+    const cd=joinBytes([new Uint8Array([0x50,0x4b,0x01,0x02]),le16(20),le16(20),le16(flag),le16(0),le16(dt.time),le16(dt.date),le32(crc),le32(e.blob.size),le32(e.blob.size),le16(name.length),le16(0),le16(0),le16(0),le16(0),le32(0),le32(offset),name]);
+    central.push(cd);offset+=local.length+e.blob.size;
+  }
+  const centralSize=central.reduce((s,a)=>s+a.length,0);if(offset+centralSize>=0xffffffff)throw new Error('当前 ZIP 批次超过 4GB，请降低批次体积');
+  const end=joinBytes([new Uint8Array([0x50,0x4b,0x05,0x06]),le16(0),le16(0),le16(entries.length),le16(entries.length),le32(centralSize),le32(offset),le16(0)]);
+  return new Blob([...parts,...central,end],{type:'application/zip'});
+}
+function downloadBlob(blob,name){const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000)}
+
+function recordError(item,status,reason){state.errors.push({file:item.rel,status,reason,size:item.file.size,width:item.width||'',height:item.height||''})}
+function csvCell(v){return `"${String(v??'').replace(/"/g,'""')}"`}
+$('downloadErrors').onclick=()=>{if(!state.errors.length)return;const rows=[['文件','状态','原大小(bytes)','宽','高','原因'],...state.errors.map(x=>[x.file,x.status,x.size,x.width,x.height,x.reason])],csv='\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\n'),blob=new Blob([csv],{type:'text/csv;charset=utf-8'});downloadBlob(blob,`HEIC转换异常清单_${ts()}.csv`)};
+
+async function flushZip(batch,index){
+  if(!batch.length)return true;
+  setProgress(0,1,`正在生成第 ${index} 个 ZIP（${batch.length} 张）…`);
+  try{
+    const zip=await buildZip(batch);
+    downloadBlob(zip,`HEIC转PNG_${state.runId}_${String(index).padStart(3,'0')}.zip`);
+    state.zipCount++;
+    for(const e of batch){
+      e.item.status='success';e.item.detail=e.warn?`高负载 ${e.mp.toFixed(1)}MP · PNG已校验并打包`:'PNG尺寸已校验并打包';
+      e.item.pngSize=e.blob.size;state.ok++;state.outBytes+=e.blob.size;
+    }
+    updateStats();
+    await new Promise(r=>setTimeout(r,1000));
+    return true;
+  }catch(err){
+    for(const e of batch){e.item.status='failed';e.item.detail='ZIP 打包失败：'+(err?.message||err);state.fail++;recordError(e.item,'ZIP打包失败',e.item.detail)}
+    render();return false;
+  }
+}
+
+async function runZipMode(){
+  const maxCount=Math.max(1,Number($('batchCount').value||100)),maxBytes=Math.max(50,Number($('batchMB').value||200))*1024*1024,used=new Set();let batch=[],batchBytes=0,batchIndex=1;
+  for(let i=0;i<state.items.length;i++){
+    if(state.cancelRequested)break;
+    const item=state.items[i];item.status='processing';item.detail='正在解码';
+    try{
+      const r=await convertOne(item),out=makeOutputPath(item,used);item.width=r.w;item.height=r.h;
+      if(batch.length&&(batch.length>=maxCount||batchBytes+r.blob.size>maxBytes)){await flushZip(batch,batchIndex++);batch=[];batchBytes=0}
+      batch.push({path:out.rel,blob:r.blob,item,mp:r.mp,warn:r.warn});batchBytes+=r.blob.size;item.pngSize=r.blob.size;item.detail='PNG已生成，等待打包';
+      if(r.blob.size>maxBytes)item.detail+='（单张超过批次目标，将单独成批）';
+      if(batch.length>=maxCount||batchBytes>=maxBytes){await flushZip(batch,batchIndex++);batch=[];batchBytes=0}
+    }catch(e){if(e?.code==='TOO_LARGE'){state.skip++;item.status='skipped';item.detail=e.message;recordError(item,'超大图跳过',e.message)}else{state.fail++;item.status='failed';item.detail=e?.message||String(e);recordError(item,'失败',item.detail)}}
+    state.processed=i+1;setProgress(i+1,state.items.length,`正在转换 ${i+1}/${state.items.length} · 成功 ${state.ok} · 失败 ${state.fail} · 跳过 ${state.skip}`);
+    if((i+1)%10===0||i===state.items.length-1){render();await yieldUI()}
+  }
+  if(batch.length)await flushZip(batch,batchIndex++);
+}
+
+async function ensureWritePermission(handle){
+  if(!handle)return false;
+  const opts={mode:'readwrite'};
+  try{if(typeof handle.queryPermission==='function'&&(await handle.queryPermission(opts))==='granted')return true;if(typeof handle.requestPermission==='function')return(await handle.requestPermission(opts))==='granted';return true}catch{return false}
+}
+
+async function runFolderMode(){
+  if(!state.outputRoot)throw new Error('尚未选择输出文件夹');if(!await ensureWritePermission(state.outputRoot))throw new Error('没有输出文件夹写入权限');const session=await state.outputRoot.getDirectoryHandle(`HEIC转PNG_${ts()}`,{create:true}),used=new Set();
+  for(let i=0;i<state.items.length;i++){
+    if(state.cancelRequested)break;
+    const item=state.items[i];item.status='processing';item.detail='正在解码';
+    try{
+      const r=await convertOne(item),out=makeOutputPath(item,used),dir=await ensureDir(session,out.parts);await writeBlob(dir,out.name,r.blob);item.width=r.w;item.height=r.h;item.pngSize=r.blob.size;state.outBytes+=r.blob.size;state.ok++;item.status='success';item.detail=r.warn?`高负载 ${r.mp.toFixed(1)}MP · 已校验并写盘`:'尺寸已校验并写盘';
+    }catch(e){if(e?.code==='TOO_LARGE'){state.skip++;item.status='skipped';item.detail=e.message;recordError(item,'超大图跳过',e.message)}else{state.fail++;item.status='failed';item.detail=e?.message||String(e);recordError(item,'失败',item.detail)}}
+    state.processed=i+1;setProgress(i+1,state.items.length,`正在写入 ${i+1}/${state.items.length} · 成功 ${state.ok} · 失败 ${state.fail} · 跳过 ${state.skip}`);if((i+1)%10===0||i===state.items.length-1){render();await yieldUI()}
+  }
+}
+
+$('stop').onclick=()=>{if(state.running){state.cancelRequested=true;$('stop').disabled=true;showMessage('已请求停止：当前图片 / 当前 ZIP 批次完成后停止。','warn')}};
+
+$('start').onclick=async()=>{
+  if(state.running||!state.items.length)return;state.running=true;state.cancelRequested=false;state.processed=0;state.runId=ts();state.ok=state.fail=state.skip=state.outBytes=state.zipCount=0;state.errors=[];for(const x of state.items){x.status='waiting';x.detail='';x.width=x.height=x.pngSize=0}detectMode();updateButtons();showMessage('');render();
+  try{
+    if(state.mode==='folder')await runFolderMode();else await runZipMode();
+    const txt=`${state.cancelRequested?'任务已停止':'处理完成'}：成功 ${state.ok} 张，失败 ${state.fail} 张，跳过 ${state.skip} 张，输出约 ${formatBytes(state.outBytes)}${state.mode==='zip'?`，ZIP ${state.zipCount} 个`:''}。`;
+    showMessage(txt,state.fail||state.skip||state.cancelRequested?'warn':'ok');setProgress(state.processed,state.items.length,txt);
+  }catch(e){showMessage('批量处理发生错误：'+(e?.message||e),'error');setProgress(0,state.items.length,'处理被中断')}
+  finally{state.running=false;detectMode();render()}
+};
+
+detectMode();render();setProgress(0,0,'尚未添加图片');
+</script>
+</body>
+</html>

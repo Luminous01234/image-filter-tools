@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>图片黑白边一键批量裁剪 v9 复杂边框增强版</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1d2329;--muted:#66707a;--line:#dfe3e8;--accent:#1677ff;--ok:#389e0d;--warn:#ad6800;--danger:#d4380d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif}
+.app{max-width:1380px;margin:0 auto;padding:26px 20px 50px}
+h1{margin:0 0 6px;font-size:26px}
+.sub{color:var(--muted);line-height:1.6;margin-bottom:16px}
+.toolbar,.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.toolbar{padding:15px;display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:9px 14px;cursor:pointer}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.drop{margin-top:13px;border:2px dashed #b9c1ca;border-radius:14px;padding:30px;text-align:center;background:#fff;transition:.15s}
+.drop.over{border-color:var(--accent);background:#f0f7ff}
+.drop strong{display:block;font-size:17px;margin-bottom:6px}
+.settings{margin-top:13px;padding:15px}
+.settings-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:13px}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+input[type=range]{width:100%}
+.range-line{display:flex;gap:8px;align-items:center}
+.range-value{min-width:56px;text-align:right;font-variant-numeric:tabular-nums}
+.hint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px}
+.notice{margin-top:12px;padding:11px 13px;background:#f6f8fa;border-radius:10px;color:#4b5560;font-size:12px;line-height:1.65}
+.progress-wrap{margin-top:13px}
+.progress{height:8px;background:#edf0f2;border-radius:99px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .12s}
+.status{margin-top:7px;color:var(--muted);font-size:13px}
+.table-card{margin-top:13px;overflow:hidden}
+.table-head{padding:13px 15px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.table-wrap{overflow:auto;max-height:620px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 11px;border-bottom:1px solid #eef0f2;text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:#fafbfc;z-index:1}
+.preview{width:110px;height:62px;object-fit:contain;background:#151515;border-radius:5px}
+.badge{display:inline-block;border-radius:99px;padding:3px 8px;font-size:12px}
+.badge.ok{background:#f0f9eb;color:var(--ok)}
+.badge.warn{background:#fff7e6;color:var(--warn)}
+.badge.none{background:#f5f5f5;color:#666}
+.badge.err{background:#fff1f0;color:var(--danger)}
+.empty{text-align:center;padding:45px;color:var(--muted)}
+footer{margin-top:15px;color:var(--muted);font-size:12px;line-height:1.7}
+@media(max-width:1000px){.settings-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}}
+@media(max-width:560px){.settings-grid{grid-template-columns:1fr}.app{padding:16px 11px}}
+.validity{display:none;margin-top:10px;padding:10px 12px;border-radius:9px;background:#fff1f0;color:#a8071a;font-size:12px}.small-note{font-size:11px;color:var(--muted);margin-top:3px}.output-name{font-size:12px;color:var(--muted)} select{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;color:var(--text)}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>图片黑白边一键批量裁剪 <small style="font-size:13px;color:#66707a">v9 复杂边框增强版</small></h1>
+  <div class="sub">针对数千张图片与复杂黑白边优化：支持外边、内嵌黑框/白框、相邻黑白多层边框；超高分辨率的疑似细边会自动做原图窄边 1:1 深度复核。检测阶段不长期保留原图解码对象，导出逐张写盘。</div>
+
+  <div class="toolbar">
+    <button class="btn primary" id="pickFiles">选择图片</button>
+    <button class="btn" id="pickFolder">选择文件夹</button>
+    <button class="btn" id="analyze" disabled>开始检测</button>
+    <button class="btn" id="pickOutput">选择输出文件夹</button>
+    <button class="btn primary" id="export" disabled>逐张导出到文件夹</button>
+    <button class="btn" id="clear" disabled>清空</button>
+    <span class="output-name" id="outputName">未选择输出文件夹</span>
+    <input id="fileInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif" multiple hidden>
+    <input id="folderInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif" webkitdirectory directory multiple hidden>
+  </div>
+
+  <div class="drop" id="drop">
+    <strong>把图片拖到这里；整个文件夹请使用“选择文件夹”</strong>
+    支持 JPG / JPEG / PNG / WebP / GIF / BMP / AVIF 等浏览器可读取的格式；GIF / 动画 WebP 不自动裁剪，导出时原样复制。
+  </div>
+
+  <div class="card settings">
+    <div class="settings-grid">
+      <div><label>黑边严格亮度 ≤ <span id="darkVal">8</span></label><div class="range-line"><input id="dark" type="range" min="0" max="30" value="8"></div><div class="hint">实际参与黑边像素判定。</div></div>
+      <div><label>纯白边亮度 ≥ <span id="lightVal">247</span></label><div class="range-line"><input id="light" type="range" min="225" max="255" value="247"></div><div class="hint">实际参与纯白外边检测。</div></div>
+      <div><label>相纸白边亮度 ≥ <span id="frameLightVal">220</span></label><div class="range-line"><input id="frameLight" type="range" min="205" max="245" value="220"></div><div class="hint">识别米白、灰白、轻微阴影白框。</div></div>
+      <div><label>最小白边带厚度 <span id="frameMinVal">6</span> 原图px</label><div class="range-line"><input id="frameMin" type="range" min="3" max="40" value="6"></div><div class="hint">按原图像素解释，缩略分析时自动换算。</div></div>
+      <div><label>边缘覆盖率 ≥ <span id="covVal">98.5%</span></label><div class="range-line"><input id="cov" type="range" min="95" max="100" step="0.1" value="98.5"></div><div class="hint">越高越保守。</div></div>
+      <div><label>最小边框厚度 <span id="minVal">2</span> 原图px</label><div class="range-line"><input id="min" type="range" min="1" max="20" value="2"></div><div class="hint">按原图像素解释。</div></div>
+      <div><label>单边最大裁剪比例 <span id="maxVal">35%</span></label><div class="range-line"><input id="max" type="range" min="5" max="45" value="35"></div><div class="hint">只限制单边。</div></div>
+      <div><label>倾斜残边基础补刀 <span id="residualMaxVal">12</span> 原图px</label><div class="range-line"><input id="residualMax" type="range" min="2" max="24" value="12"></div><div class="hint">基础值；超高分辨率会按尺寸与拟合斜率动态扩展，安全上限 64px。</div></div>
+      <div style="display:flex;align-items:center;gap:8px;padding-top:22px"><input id="residualOn" type="checkbox" checked><label for="residualOn" style="margin:0;color:#1d2329">启用倾斜残边补刀</label></div>
+      <div><label>页面最多预览</label><select id="previewLimit"><option value="200">200 张</option><option value="300" selected>300 张</option><option value="500">500 张</option></select><div class="hint">仅影响页面显示，不影响实际检测数量。</div></div>
+    </div>
+    <div class="notice">
+      <strong>安全与大批量策略：</strong>所有“px”参数都按原图像素解释；支持灰/彩背景外侧的内嵌黑框、白框，以及黑→白、白→黑等最多 4 层相邻边框。白框过渡区也按原图像素换算。<br>
+      超高分辨率图片若缩略分析只得到“疑似细边”，会仅截取对应原图窄边条进行 1:1 深度复核，不做整张原图像素扫描。倾斜残边只在已确认方向、同一颜色类型上补刀，动态上限 64px。任何参数变化都会使旧结果失效。<br>
+      导出时自动创建新的时间戳子文件夹，保留相对目录并逐张写盘。无边框、读取失败、动画格式原样复制；真正裁剪的静态图会重新编码，EXIF/ICC 等元数据不保证保留。
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress"><i id="bar"></i></div>
+    <div class="status" id="status">尚未添加图片</div>
+    <div class="validity" id="validity">检测参数已变化，旧检测结果仅供查看。请重新检测后再导出。</div>
+  </div>
+
+  <div class="card table-card">
+    <div class="table-head"><strong>检测结果</strong><span class="small" id="count">0 张</span></div>
+    <div class="table-wrap"><table><thead><tr><th>预览</th><th>文件名/路径</th><th>原尺寸</th><th>上</th><th>下</th><th>左</th><th>右</th><th>边框类型</th><th>裁后尺寸</th><th>状态</th></tr></thead><tbody id="tbody"><tr><td colspan="10" class="empty">添加图片后点击“开始检测”</td></tr></tbody></table></div>
+  </div>
+
+  <footer>输出不再生成单个大 ZIP，而是逐张写入本地输出文件夹，适合数千张/多 GB 数据。没有发生裁剪的文件直接复制原文件；发生裁剪的 JPG/PNG/WebP 会重新编码，其他可解码静态格式裁剪后输出 PNG。</footer>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let items=[];
+let outputRoot=null;
+let analysisFingerprint=null;
+let analysisValid=false;
+let busy=false;
+
+function setStatus(t,p=null){$("status").textContent=t;if(p!==null)$("bar").style.width=Math.max(0,Math.min(100,p))+"%"}
+function formatBytes(n){if(n<1024)return n+" B";if(n<1048576)return(n/1024).toFixed(1)+" KB";if(n<1073741824)return(n/1048576).toFixed(1)+" MB";return(n/1073741824).toFixed(1)+" GB"}
+function isImage(f){return /^image\//i.test(f.type)||/\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(f.name)}
+function sleep0(){return new Promise(r=>setTimeout(r,0))}
+function relativePathOf(f){return f.webkitRelativePath||f.name}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+function cfg(){return {dark:Number($("dark").value),light:Number($("light").value),frameLight:Number($("frameLight").value),frameMin:Number($("frameMin").value),cov:Number($("cov").value)/100,minBorder:Number($("min").value),maxRatio:Number($("max").value)/100,residualMax:Number($("residualMax").value),residualOn:$("residualOn").checked}}
+function fingerprint(){return JSON.stringify(cfg())}
+function invalidateResults(){if(busy)return;analysisValid=false;$("validity").style.display=items.some(x=>x.result)?"block":"none";$("export").disabled=true}
+function setBusy(on){busy=on;["pickFiles","pickFolder","analyze","pickOutput","clear"].forEach(id=>$(id).disabled=on||((id==="analyze"||id==="clear")&&!items.length));["dark","light","frameLight","frameMin","cov","min","max","residualMax","residualOn","previewLimit"].forEach(id=>$(id).disabled=on)}
+
+const labels={dark:"darkVal",light:"lightVal",frameLight:"frameLightVal",frameMin:"frameMinVal",cov:"covVal",min:"minVal",max:"maxVal",residualMax:"residualMaxVal"};
+Object.keys(labels).forEach(id=>{$(id).oninput=()=>{let v=$(id).value;if(id==="cov"||id==="max")v+="%";$(labels[id]).textContent=v;invalidateResults()}});
+$("residualOn").onchange=invalidateResults;
+$("previewLimit").onchange=render;
+
+$("pickFiles").onclick=()=>$("fileInput").click();
+$("pickFolder").onclick=()=>$("folderInput").click();
+$("fileInput").onchange=e=>addFiles([...e.target.files]);
+$("folderInput").onchange=e=>addFiles([...e.target.files]);
+["dragenter","dragover"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.add("over")}));
+["dragleave","drop"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.remove("over")}));
+$("drop").addEventListener("drop",e=>addFiles([...e.dataTransfer.files]));
+
+function addFiles(files){
+  const valid=files.filter(isImage);if(!valid.length){setStatus("没有发现可读取的图片文件");return}
+  const seen=new Set(items.map(x=>x.key));
+  for(const f of valid){
+    const rel=relativePathOf(f);const key=rel+"|"+f.size+"|"+f.lastModified;
+    if(!seen.has(key)){items.push({file:f,key,relativePath:rel,result:null});seen.add(key)}
+  }
+  analysisValid=false;analysisFingerprint=null;render();$("clear").disabled=false;$("analyze").disabled=false;$("export").disabled=true;$("validity").style.display="none";setStatus(`已读取 ${items.length} 张图片`,0);
+}
+$("clear").onclick=()=>{items=[];$("fileInput").value="";$("folderInput").value="";analysisValid=false;analysisFingerprint=null;render();$("clear").disabled=true;$("analyze").disabled=true;$("export").disabled=true;$("validity").style.display="none";setStatus("尚未添加图片",0)};
+
+function render(){
+  const limit=Number($("previewLimit").value||300),shown=items.slice(0,limit);
+  $("count").textContent=items.length+(items.length>limit?` 张（显示前 ${limit}）`:" 张");
+  if(!items.length){$("tbody").innerHTML='<tr><td colspan="10" class="empty">添加图片后点击“开始检测”</td></tr>';return}
+  $("tbody").innerHTML=shown.map(it=>{
+    const r=it.result;let status='<span class="badge none">未检测</span>',type="—",size="—",dims="—",cuts=["—","—","—","—"];
+    if(r){
+      if(r.error){status='<span class="badge err">读取失败·原样复制</span>';}
+      else if(r.skipped){status='<span class="badge warn">跳过裁剪·原样复制</span>';type=r.reason||"动画格式";dims=r.w&&r.h?`${r.w} × ${r.h}`:"—";size=dims;}
+      else{dims=`${r.w} × ${r.h}`;cuts=[r.top,r.bottom,r.left,r.right];if(r.total>0){status='<span class="badge ok">已检测到边框</span>';type=r.borderType;size=`${r.w-r.left-r.right} × ${r.h-r.top-r.bottom}`;}else{status='<span class="badge none">无边框·原样复制</span>';size=dims;}}
+    }
+    return `<tr><td>${r?.preview?`<img class="preview" src="${r.preview}">`:"—"}</td><td title="${escapeHtml(it.relativePath)}">${escapeHtml(it.relativePath)}</td><td>${dims}</td><td>${cuts[0]}</td><td>${cuts[1]}</td><td>${cuts[2]}</td><td>${cuts[3]}</td><td>${escapeHtml(type)}</td><td>${size}</td><td>${status}${r?.error?`<div class="small-note">${escapeHtml(r.error)}</div>`:""}</td></tr>`;
+  }).join("")+(items.length>limit?`<tr><td colspan="10" class="empty">其余 ${items.length-limit} 张不渲染到页面，但仍会完整检测和导出。</td></tr>`:"");
+}
+
+function loadImage(file){return new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("浏览器无法解码该图片"))};img.src=url})}
+function makeAnalysisCanvas(img,maxSide=2600){const scale=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight));const w=Math.max(1,Math.round(img.naturalWidth*scale)),h=Math.max(1,Math.round(img.naturalHeight*scale));const c=document.createElement("canvas");c.width=w;c.height=h;const ctx=c.getContext("2d",{willReadFrequently:true});if(!ctx)throw new Error("无法创建分析画布");ctx.drawImage(img,0,0,w,h);return{canvas:c,w,h,scale}}
+
+function getLineStats(data,w,h,side,index,c){
+  const vertical=side==="left"||side==="right",lo=Math.floor((vertical?h:w)*.08),hi=Math.ceil((vertical?h:w)*.92);let sum=0,sum2=0,dark=0,darkSoft=0,light=0,lightSoft=0,rSum=0,gSum=0,bSum=0;const len=Math.max(1,hi-lo);const darkSoftT=Math.min(80,c.dark+20),lightSoftT=Math.max(180,c.light-15);
+  for(let q=lo;q<hi;q++){const x=vertical?index:q,y=vertical?q:index,p=(y*w+x)*4,r=data[p],g=data[p+1],b=data[p+2],lum=.2126*r+.7152*g+.0722*b;sum+=lum;sum2+=lum*lum;rSum+=r;gSum+=g;bSum+=b;if(lum<=c.dark)dark++;if(lum<=darkSoftT)darkSoft++;if(lum>=c.light)light++;if(lum>=lightSoftT)lightSoft++}
+  const mean=sum/len,variance=Math.max(0,sum2/len-mean*mean),rgb=[rSum/len,gSum/len,bSum/len];return{mean,std:Math.sqrt(variance),dark:dark/len,darkSoft:darkSoft/len,light:light/len,lightSoft:lightSoft/len,chroma:Math.max(...rgb)-Math.min(...rgb),rgb}
+}
+function isWhiteFrameLine(s,c){return s.mean>=c.frameLight&&s.std<=10.5&&s.chroma<=22}
+function adjacentContrast(data,w,h,side,index,c){const maxIdx=(side==="top"||side==="bottom")?h-1:w-1,aIdx=Math.max(0,Math.min(maxIdx,index-1)),bIdx=Math.max(0,Math.min(maxIdx,index+1));return Math.abs(getLineStats(data,w,h,side,aIdx,c).mean-getLineStats(data,w,h,side,bIdx,c).mean)}
+function lineDepthIndex(w,h,side,k){return side==="top"?k:side==="bottom"?h-1-k:side==="left"?k:w-1-k}
+function classifyFrameLine(s,c){
+  const blackStrict=s.dark>=c.cov&&s.mean<=Math.max(12,c.dark+3)&&s.std<=18;
+  const blackSoft=s.darkSoft>=Math.max(.95,c.cov-.025)&&s.mean<=Math.max(28,c.dark+16)&&s.std<=18;
+  if(blackStrict||blackSoft)return{kind:"black",strict:blackStrict};
+  const whiteStrict=s.light>=c.cov&&s.mean>=c.light&&s.std<=18;
+  if(whiteStrict)return{kind:"white",strict:true};
+  if(isWhiteFrameLine(s,c))return{kind:"white",strict:false};
+  return null;
+}
+function boundaryConfirmed(data,w,h,side,boundaryK,c,frameStd=0){
+  const vertical=side==="left"||side==="right",size=vertical?w:h;
+  if(boundaryK<1||boundaryK>=size-2)return false;
+  const idx=lineDepthIndex(w,h,side,boundaryK),edge=adjacentContrast(data,w,h,side,idx,c);
+  const innerK=Math.min(size-1,boundaryK+2),inner=getLineStats(data,w,h,side,lineDepthIndex(w,h,side,innerK),c);
+  return edge>=10||inner.std>=Math.max(8,frameStd+2.5);
+}
+function runStartConfirmed(data,w,h,side,runStart,c){
+  if(runStart<=1)return true;
+  const idx=lineDepthIndex(w,h,side,runStart),edge=adjacentContrast(data,w,h,side,idx,c);
+  const beforeK=Math.max(0,runStart-2),before=getLineStats(data,w,h,side,lineDepthIndex(w,h,side,beforeK),c);
+  return edge>=8||before.std<=12;
+}
+function finalizeFrameRun(data,w,h,side,c,scale,runKind,runStrict,runStart,runEnd,minBlack,minWhite,maxDepth){
+  const runLen=runEnd-runStart+1,minNeed=runKind==="black"?minBlack:(runStrict?minBlack:minWhite);
+  if(runLen<minNeed||!runStartConfirmed(data,w,h,side,runStart,c))return null;
+  const transitionPx=Math.max(1,Math.ceil(4*scale));
+  let boundaryK=runEnd+1;
+  for(let t=0;t<transitionPx&&boundaryK<maxDepth;t++){
+    const s=getLineStats(data,w,h,side,lineDepthIndex(w,h,side,boundaryK),c);
+    const transition=runKind==="black"?(s.mean<=Math.max(45,c.dark+30)&&s.std<=25):(s.mean>=c.frameLight-25&&s.std<=25&&s.chroma<=42);
+    if(!transition)break;boundaryK++;
+  }
+  let stdSum=0,stdN=0;
+  for(let k=runStart;k<=runEnd;k++){stdSum+=getLineStats(data,w,h,side,lineDepthIndex(w,h,side,k),c).std;stdN++}
+  const frameStd=stdSum/Math.max(1,stdN);
+  if(!boundaryConfirmed(data,w,h,side,boundaryK,c,frameStd))return null;
+  return{kind:runKind,strict:runStrict,start:runStart,end:runEnd,boundary:boundaryK};
+}
+function findFrameBand(data,w,h,side,c,scale,startK,maxDepth,startLimit=maxDepth){
+  const minBlack=Math.max(1,Math.ceil(c.minBorder*scale)),minWhite=Math.max(1,Math.ceil(c.frameMin*scale));
+  let runKind=null,runStrict=false,runStart=-1,runEnd=-1;
+  const flush=(endK)=>{if(runKind===null)return null;const r=finalizeFrameRun(data,w,h,side,c,scale,runKind,runStrict,runStart,endK,minBlack,minWhite,maxDepth);runKind=null;runStrict=false;runStart=-1;runEnd=-1;return r};
+  for(let k=startK;k<maxDepth;k++){
+    const cls=classifyFrameLine(getLineStats(data,w,h,side,lineDepthIndex(w,h,side,k),c),c);
+    if(cls){
+      if(runKind===cls.kind){runEnd=k;runStrict=runStrict||cls.strict}
+      else{const old=flush(k-1);if(old&&old.start<=startLimit)return old;runKind=cls.kind;runStrict=cls.strict;runStart=runEnd=k}
+    }else{const old=flush(k-1);if(old&&old.start<=startLimit)return old}
+    if(runStart>startLimit)return null;
+  }
+  const old=flush(maxDepth-1);return old&&old.start<=startLimit?old:null;
+}
+function detectSideLayers(data,w,h,side,c,scale){
+  const vertical=side==="left"||side==="right",size=vertical?w:h,maxDepth=Math.max(1,Math.floor(size*c.maxRatio));
+  const transitionPx=Math.max(1,Math.ceil(4*scale)),layers=[];
+  let first=findFrameBand(data,w,h,side,c,scale,0,maxDepth,maxDepth);
+  if(!first){
+    const edge=getLineStats(data,w,h,side,lineDepthIndex(w,h,side,0),c),suspect=(edge.darkSoft>=.72&&edge.mean<=55)||(edge.lightSoft>=.72&&edge.mean>=205)||isWhiteFrameLine(edge,c);
+    return{n:0,kind:null,kinds:[],layers:[],suspectFine:suspect};
+  }
+  layers.push(first);let boundary=first.boundary;
+  for(let i=1;i<4&&boundary<maxDepth;i++){
+    const startLimit=Math.min(maxDepth-1,boundary+transitionPx*2+2);
+    const next=findFrameBand(data,w,h,side,c,scale,boundary,maxDepth,startLimit);
+    if(!next)break;
+    layers.push(next);boundary=next.boundary;
+  }
+  const kinds=layers.map(x=>x.kind),kind=[...new Set(kinds)].length>1?"mixed":kinds[kinds.length-1];
+  return{n:Math.max(0,boundary),kind,innerKind:kinds[kinds.length-1]||null,kinds,layers,suspectFine:false};
+}
+function fineStripDepth(img,side,c){
+  const dim=(side==="top"||side==="bottom")?img.naturalHeight:img.naturalWidth;
+  return Math.max(8,Math.min(Math.floor(dim*c.maxRatio),160,Math.max(48,c.frameMin*5,c.minBorder*8,c.residualMax*4)));
+}
+function detectFineSideOriginal(img,side,c){
+  const depth=fineStripDepth(img,side,c);if(depth<1)return null;
+  const vertical=side==="left"||side==="right",longSrc=vertical?img.naturalHeight:img.naturalWidth,longDst=Math.max(1,Math.min(4000,longSrc));
+  const cv=document.createElement("canvas");
+  if(vertical){cv.width=depth;cv.height=longDst}else{cv.width=longDst;cv.height=depth}
+  const ctx=cv.getContext("2d",{willReadFrequently:true});if(!ctx)return null;
+  if(side==="top")ctx.drawImage(img,0,0,img.naturalWidth,depth,0,0,longDst,depth);
+  else if(side==="bottom")ctx.drawImage(img,0,img.naturalHeight-depth,img.naturalWidth,depth,0,0,longDst,depth);
+  else if(side==="left")ctx.drawImage(img,0,0,depth,img.naturalHeight,0,0,depth,longDst);
+  else ctx.drawImage(img,img.naturalWidth-depth,0,depth,img.naturalHeight,0,0,depth,longDst);
+  try{const data=ctx.getImageData(0,0,cv.width,cv.height).data,c2={...c,maxRatio:1};return detectSideLayers(data,cv.width,cv.height,side,c2,1)}finally{cv.width=cv.height=1}
+}
+
+function residualPixelKind(r,g,b,c){const lum=.2126*r+.7152*g+.0722*b,chroma=Math.max(r,g,b)-Math.min(r,g,b);if(lum<=Math.max(42,c.dark+25))return"black";if(Math.min(r,g,b)>=Math.max(190,c.frameLight-15)&&chroma<=48)return"white";return null}
+function getResidualRuns(data,w,h,side,maxD,c){const vertical=side==="left"||side==="right",length=vertical?h:w,runs=new Int16Array(length),kinds=new Array(length);for(let q=0;q<length;q++){let d=0,kind=null;for(let k=0;k<maxD;k++){const x=side==="left"?k:side==="right"?w-1-k:q,y=side==="top"?k:side==="bottom"?h-1-k:q,p=(y*w+x)*4,kk=residualPixelKind(data[p],data[p+1],data[p+2],c);if(!kk)break;if(kind===null)kind=kk;if(kk!==kind)break;d++}runs[q]=d;kinds[q]=kind}return{runs,kinds}}
+function robustLineDepth(runs,kinds,maxD,expectedKind){const xs=[],ys=[];for(let i=0;i<runs.length;i++){const d=runs[i];if(d>=1&&d<=maxD&&(!expectedKind||kinds[i]===expectedKind)){xs.push(i);ys.push(d)}}if(xs.length<Math.max(30,Math.floor(runs.length*.18)))return null;let x=xs.map(Number),y=ys.map(Number),slope=0,intercept=0;for(let iter=0;iter<4;iter++){if(x.length<20)return null;let sx=0,sy=0,sxx=0,sxy=0;for(let i=0;i<x.length;i++){sx+=x[i];sy+=y[i];sxx+=x[i]*x[i];sxy+=x[i]*y[i]}const n=x.length,den=n*sxx-sx*sx;slope=Math.abs(den)<1e-9?0:(n*sxy-sx*sy)/den;intercept=(sy-slope*sx)/n;const nx=[],ny=[];for(let i=0;i<x.length;i++){if(Math.abs(y[i]-(slope*x[i]+intercept))<=1.5){nx.push(x[i]);ny.push(y[i])}}if(nx.length===x.length)break;x=nx;y=ny}let inlier=0,sumErr=0;for(let i=0;i<xs.length;i++){const e=Math.abs(ys[i]-(slope*xs[i]+intercept));if(e<=1.5){inlier++;sumErr+=e}}const coverage=inlier/Math.max(1,xs.length),candidateCoverage=xs.length/runs.length,maxPred=Math.max(intercept,slope*(runs.length-1)+intercept);if(candidateCoverage<.55||coverage<.82||maxPred<1||maxPred>maxD+1||Math.abs(slope)>.12)return null;if(sumErr/Math.max(1,inlier)>.9)return null;return{depth:Math.max(1,Math.min(maxD+1,Math.ceil(maxPred))),slope,coverage,candidateCoverage}}
+function detectResidualEdge(data,w,h,side,maxD,c,kind){const {runs,kinds}=getResidualRuns(data,w,h,side,maxD,c),fit=robustLineDepth(runs,kinds,maxD,kind);return fit||null}
+function dynamicResidualCapOriginal(cw,ch,c){return Math.min(64,Math.max(c.residualMax,Math.ceil(Math.max(cw,ch)*.004)))}
+function cleanupResidualEdges(canvas,allowedKinds,c,scale,dynamicCapOriginal){const ctx=canvas.getContext("2d",{willReadFrequently:true});if(!ctx)return{top:0,bottom:0,left:0,right:0};const data=ctx.getImageData(0,0,canvas.width,canvas.height).data,maxD=Math.max(1,Math.ceil(dynamicCapOriginal*scale)),out={top:0,bottom:0,left:0,right:0};for(const side of ["top","bottom","left","right"]){if(allowedKinds[side]){const fit=detectResidualEdge(data,canvas.width,canvas.height,side,maxD,c,allowedKinds[side]);if(fit){const origDepth=Math.ceil(fit.depth/scale),angleBoost=Math.ceil(Math.abs(fit.slope)*(side==="top"||side==="bottom"?canvas.width:canvas.height)/Math.max(scale,1e-6));out[side]=Math.min(dynamicCapOriginal,Math.max(origDepth,Math.min(dynamicCapOriginal,angleBoost))) * scale}}}const minW=canvas.width-2,minH=canvas.height-2;out.left=Math.min(out.left,Math.max(0,minW-out.right));out.right=Math.min(out.right,Math.max(0,minW-out.left));out.top=Math.min(out.top,Math.max(0,minH-out.bottom));out.bottom=Math.min(out.bottom,Math.max(0,minH-out.top));return out}
+
+async function isLikelyAnimated(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(ext==='gif')return true;
+  if(ext!=='webp')return false;
+  try{
+    const u8=new Uint8Array(await file.slice(0,30).arrayBuffer());
+    if(u8.length<21)return false;
+    const tag=(a,b,c,d)=>u8[a]===b&&u8[a+1]===c&&u8[a+2]===d;
+    const riff=u8[0]===0x52&&u8[1]===0x49&&u8[2]===0x46&&u8[3]===0x46;
+    const webp=u8[8]===0x57&&u8[9]===0x45&&u8[10]===0x42&&u8[11]===0x50;
+    const vp8x=u8[12]===0x56&&u8[13]===0x50&&u8[14]===0x38&&u8[15]===0x58;
+    return riff&&webp&&vp8x&&((u8[20]&0x02)!==0);
+  }catch{return false}
+}
+
+async function analyzeItem(it,makePreview,c){
+  if(await isLikelyAnimated(it.file))return{skipped:true,reason:"动画格式",preview:null};
+  const img=await loadImage(it.file);let a=null,rc=null;
+  try{
+    a=makeAnalysisCanvas(img);const ctx=a.canvas.getContext("2d",{willReadFrequently:true});if(!ctx)throw new Error("无法创建分析画布");
+    const data=ctx.getImageData(0,0,a.w,a.h).data,sides=["top","bottom","left","right"],detected={},kinds={},layerKinds={},fineChecked={};
+    for(const side of sides){
+      let r=detectSideLayers(data,a.w,a.h,side,c,a.scale);
+      let n=Math.round((r.n||0)/a.scale);
+      if(n===0&&r.suspectFine&&Math.max(img.naturalWidth,img.naturalHeight)>2600){
+        const fine=detectFineSideOriginal(img,side,c);
+        if(fine&&fine.n>0){r=fine;n=fine.n;fineChecked[side]=true}
+      }
+      detected[side]=n;kinds[side]=r.innerKind||r.kind||null;layerKinds[side]=r.kinds||[];
+    }
+    const maxW=Math.max(1,img.naturalWidth-2),maxH=Math.max(1,img.naturalHeight-2);
+    detected.left=Math.min(detected.left,maxW-detected.right);detected.right=Math.min(detected.right,maxW-detected.left);detected.top=Math.min(detected.top,maxH-detected.bottom);detected.bottom=Math.min(detected.bottom,maxH-detected.top);
+    let residual={top:0,bottom:0,left:0,right:0};
+    if(c.residualOn&&(detected.top+detected.bottom+detected.left+detected.right)>0){
+      const l=detected.left,t=detected.top,cw=Math.max(1,img.naturalWidth-l-detected.right),ch=Math.max(1,img.naturalHeight-t-detected.bottom);rc=document.createElement("canvas");const rs=Math.min(1,3000/Math.max(cw,ch));rc.width=Math.max(1,Math.round(cw*rs));rc.height=Math.max(1,Math.round(ch*rs));const rctx=rc.getContext("2d");
+      if(rctx){
+        rctx.drawImage(img,l,t,cw,ch,0,0,rc.width,rc.height);const allowed={};for(const side of sides)if(detected[side]>0&&kinds[side])allowed[side]=kinds[side];
+        const dynamicCap=dynamicResidualCapOriginal(cw,ch,c),rr=cleanupResidualEdges(rc,allowed,c,rs,dynamicCap);for(const side of sides)residual[side]=Math.min(dynamicCap,Math.ceil(rr[side]/Math.max(rs,1e-6)));
+      }
+    }
+    detected.top=Math.min(detected.top+residual.top,maxH-detected.bottom);detected.bottom=Math.min(detected.bottom+residual.bottom,maxH-detected.top);detected.left=Math.min(detected.left+residual.left,maxW-detected.right);detected.right=Math.min(detected.right+residual.right,maxW-detected.left);
+    const total=detected.top+detected.bottom+detected.left+detected.right,types=[];
+    for(const side of sides){if(detected[side]>0){const arr=layerKinds[side]||[];if(arr.length>1)types.push(arr.map(k=>k==="black"?"黑边":"白边").join("→"));else types.push(kinds[side]==="black"?"黑边":kinds[side]==="white"?"白边":"边框");if(fineChecked[side])types.push("原图细边复核")}}
+    if(Object.values(residual).some(v=>v>0))types.push("动态倾斜残边");
+    const left=detected.left,top=detected.top,cw=Math.max(1,img.naturalWidth-left-detected.right),ch=Math.max(1,img.naturalHeight-top-detected.bottom);let preview=null;
+    if(makePreview){const pc=document.createElement("canvas"),ps=Math.min(1,110/cw,62/ch);pc.width=Math.max(1,Math.round(cw*ps));pc.height=Math.max(1,Math.round(ch*ps));const pctx=pc.getContext("2d");if(pctx){pctx.drawImage(img,left,top,cw,ch,0,0,pc.width,pc.height);preview=pc.toDataURL("image/jpeg",.78)}pc.width=pc.height=1}
+    return{w:img.naturalWidth,h:img.naturalHeight,top:detected.top,bottom:detected.bottom,left:detected.left,right:detected.right,residual,total,borderType:[...new Set(types)].join(" + ")||"",preview,fineChecked,layerKinds};
+  }finally{if(a?.canvas){a.canvas.width=a.canvas.height=1}if(rc){rc.width=rc.height=1}img.src=""}
+}
+
+$("analyze").onclick=async()=>{
+  if(!items.length)return;setBusy(true);$("export").disabled=true;$("validity").style.display="none";analysisValid=false;const c=cfg(),fp=fingerprint(),previewMax=500;
+  for(let i=0;i<items.length;i++){
+    try{items[i].result=await analyzeItem(items[i],i<previewMax,c)}catch(e){items[i].result={error:e?.message||String(e)}}
+    setStatus(`正在检测 ${i+1}/${items.length} 张`,((i+1)/items.length)*100);
+    if((i+1)%20===0||i===items.length-1)render();
+    if((i+1)%10===0)await sleep0();
+  }
+  analysisFingerprint=fp;analysisValid=true;setBusy(false);$("export").disabled=!outputRoot;$("validity").style.display="none";setStatus(`检测完成：${items.length} 张`,100);render();
+};
+
+$("pickOutput").onclick=async()=>{
+  if(!('showDirectoryPicker'in window)){alert("当前浏览器不支持直接写入文件夹，请使用最新版 Chrome / Edge。");return}
+  try{outputRoot=await window.showDirectoryPicker({mode:"readwrite"});$("outputName").textContent=`输出到：${outputRoot.name}`;$("export").disabled=!(analysisValid&&analysisFingerprint===fingerprint())}catch(e){if(e?.name!=="AbortError")alert("选择输出文件夹失败："+(e?.message||e))}
+};
+
+function ensureFresh(){if(!analysisValid||analysisFingerprint!==fingerprint()){invalidateResults();alert("检测参数已变化，请重新检测后再导出。");return false}return true}
+function tsName(){const d=new Date(),p=n=>String(n).padStart(2,'0');return`黑白边裁剪结果_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}_${String(d.getMilliseconds()).padStart(3,'0')}`}
+async function ensureDir(root,parts){let d=root;for(const part of parts){if(part)d=await d.getDirectoryHandle(part,{create:true})}return d}
+function sourceType(file){const t=(file.type||'').toLowerCase();if(["image/jpeg","image/png","image/webp"].includes(t))return t;return"image/png"}
+function outNameFor(file,type){const base=file.name.replace(/\.[^.]+$/,"");return base+(type==="image/jpeg"?".jpg":type==="image/webp"?".webp":".png")}
+async function writeBlob(dir,name,blob){const fh=await dir.getFileHandle(name,{create:true}),w=await fh.createWritable();try{await w.write(blob)}finally{await w.close()}}
+function canvasBlob(canvas,type){return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("导出编码失败")),type,type==="image/jpeg"?1:undefined))}
+
+async function exportCropped(it,dir,name){const r=it.result,img=await loadImage(it.file),cw=r.w-r.left-r.right,ch=r.h-r.top-r.bottom;let c=null;try{if(cw<1||ch<1)throw new Error("裁剪尺寸无效");c=document.createElement("canvas");c.width=cw;c.height=ch;const ctx=c.getContext("2d");if(!ctx)throw new Error("无法创建导出画布，图片可能过大");ctx.drawImage(img,r.left,r.top,cw,ch,0,0,cw,ch);const type=sourceType(it.file),blob=await canvasBlob(c,type);await writeBlob(dir,name,blob);return blob.size}finally{if(c){c.width=c.height=1}img.src=""}}
+
+$("export").onclick=async()=>{
+  if(!outputRoot||!items.length||!ensureFresh())return;setBusy(true);$("export").disabled=true;let sessionDir,ok=0,fail=0,copied=0,cropped=0,totalBytes=0;const used=new Set();
+  try{
+    sessionDir=await outputRoot.getDirectoryHandle(tsName(),{create:true});
+    for(let i=0;i<items.length;i++){
+      const it=items[i],parts=it.relativePath.split('/').filter(Boolean),origName=parts.pop()||it.file.name,dir=await ensureDir(sessionDir,parts);let name=origName;
+      try{
+        const r=it.result;
+        if(!r||r.error||r.skipped||!r.total){let rel=[...parts,name].join('/'),n=2;while(used.has(rel)){const dot=name.lastIndexOf('.'),stem=dot>0?name.slice(0,dot):name,ext=dot>0?name.slice(dot):'';name=`${stem} (${n++})${ext}`;rel=[...parts,name].join('/')}used.add(rel);await writeBlob(dir,name,it.file);totalBytes+=it.file.size;copied++;ok++}
+        else{const type=sourceType(it.file);name=outNameFor({name:origName},type);let rel=[...parts,name].join('/'),n=2;while(used.has(rel)){const dot=name.lastIndexOf('.'),stem=dot>0?name.slice(0,dot):name,ext=dot>0?name.slice(dot):'';name=`${stem} (${n++})${ext}`;rel=[...parts,name].join('/')}used.add(rel);totalBytes+=await exportCropped(it,dir,name);cropped++;ok++}
+      }catch(e){console.error("导出失败",it.relativePath,e);fail++}
+      setStatus(`正在逐张写入：${i+1}/${items.length}（成功 ${ok}，失败 ${fail}）`,((i+1)/items.length)*100);if((i+1)%5===0)await sleep0();
+    }
+    setStatus(`导出完成：成功 ${ok} 张（裁剪 ${cropped}，原样复制 ${copied}），失败 ${fail}，写入约 ${formatBytes(totalBytes)}`,100);
+    alert(`导出完成。
+
+成功：${ok} 张
+其中裁剪：${cropped} 张
+原样复制：${copied} 张
+失败：${fail} 张
+
+结果已写入新建的时间戳子文件夹。`);
+  }catch(e){alert("导出过程发生错误："+(e?.message||e));setStatus("导出过程发生错误",0)}finally{setBusy(false);$("export").disabled=!(outputRoot&&analysisValid&&analysisFingerprint===fingerprint())}
+};
+
+render();
+</script>
+</body>
+</html>
